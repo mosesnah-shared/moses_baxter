@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<launch>
+
+    <!--gripper_setup.launch
+        This script first loads the proper URDF files onto Baxter's onboard parameter server, calibrates the grippers, and starts a cuff interaction node.
+    -->
+
+    <!-- This sets the ROS logger to show the node name with every log message-->
+    <env name="ROSCONSOLE_FORMAT" value="[${severity}] [${node}]: ${message}" />
+
+    <!-- This starts the URDF loader-->
+    <!-- [Moses Nah] [2021.10.23] This was originally at David's Launch file, but this line doesn't seem to be necessary, commenting out -->
+    <!-- <node name="urdf_updater" pkg="david" type="update_urdf.sh" output="screen"/> -->
+
+    <!-- Gripper Cuff Control-->
+    <node name="cuff_control" pkg="baxter_examples" type="gripper_cuff_control.py" output="screen"/>
+
+</launch>
