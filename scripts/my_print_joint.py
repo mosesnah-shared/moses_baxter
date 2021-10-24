@@ -6,6 +6,7 @@
 # [Date]   2021.10.23
 # [Description]
 #   - The most basic code for running Baxter
+#   - This code is specifically for reading the joint datas from the Baxter Robot.
 # =========================================================== #
 
 
@@ -27,7 +28,7 @@ from   tf.transformations import ( quaternion_from_euler , quaternion_matrix   ,
 # [CONSTANTS] 
 RIGHT = 0
 LEFT  = 1
-BOTH  = 2
+# BOTH  = 2 
 
 
 # [BACKUP]
@@ -62,25 +63,21 @@ class BaxterControl( object ):
         rospy.loginfo("Enabling robot... ")
         self.rs.enable()
 
+
+
+
     def print_joints( self ):
 
-        start_time = rospy.Time.now()   
-        time = 0.0
-        T    = 5.0
         DONE = False
         while not DONE :
-
-            time = ( rospy.Time.now( ) - start_time ).to_sec()
-
-
-            c = baxter_external_devices.getch()
+            c = baxter_external_devices.getch()     # Get the char input from the Keyboard
 
             if c:
 
                 #catch Esc or ctrl-c
                 if c in ['\x1b', '\x03']:
                     DONE = True
-                    rospy.signal_shutdown("Example finished.")
+                    rospy.signal_shutdown("Reading Joint Data finished.")
 
                 if c == "p":
                     print(" Printing Joint Data")
@@ -88,7 +85,6 @@ class BaxterControl( object ):
 
 
     def clean_shutdown(self):
-
         rospy.sleep( 1 )
         self.arm.exit_control_mode()
 
@@ -96,7 +92,6 @@ class BaxterControl( object ):
 def main():
     
     print("Initializing Controller Node... ")
-    
     rospy.init_node("MY_BAXTER_CONTROL")
     
     ctrl = BaxterControl( arm_type = RIGHT )
