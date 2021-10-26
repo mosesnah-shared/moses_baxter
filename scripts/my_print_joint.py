@@ -28,7 +28,7 @@ from   tf.transformations import ( quaternion_from_euler , quaternion_matrix   ,
 # [CONSTANTS] 
 RIGHT = 0
 LEFT  = 1
-# BOTH  = 2 
+BOTH  = 2 
 
 
 # [BACKUP]

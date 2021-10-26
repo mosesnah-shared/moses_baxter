@@ -16,7 +16,7 @@ import numpy        as np
 import std_msgs.msg as msg 
 import threading
 
-from   std_msgs.msg       import UInt16, Empty
+from   std_msgs.msg       import UInt16, Empty, String
 from   baxter_interface   import CHECK_VERSION
 from   numpy.linalg       import inv, pinv
 from   baxter_pykdl       import baxter_kinematics
@@ -24,138 +24,8 @@ from   tf.transformations import ( quaternion_from_euler , quaternion_matrix   ,
                                    quaternion_inverse    , quaternion_multiply )
 
 
-# [CONSTANTS] 
-RIGHT = 0
-LEFT  = 1
-BOTH  = 2
-
-
-MIN_POSE_RIGHT = { 
-   'right_s0':  0.291072854501257, 
-   'right_s1': -0.639669988548217,
-   'right_e0':  0.656160282017985, 
-   'right_e1':  1.958509970932702, 
-   'right_w0': -0.042951462060791,
-   'right_w1': -1.183849673050568,
-   'right_w2': -0.575626290654001
-}
-
-MIN_POSE_LEFT = {  
-   'left_s0': -0.291072854501257, 
-   'left_s1': -0.639669988548217,
-   'left_e0': -0.656160282017985, 
-   'left_e1':  1.958509970932702, 
-   'left_w0': -0.042951462060791,
-   'left_w1': -1.183849673050568,
-   'left_w2':  0.575626290654001
-}
-
-
-GRASP_POSE_RIGHT = {
-    'right_s0':  0.63621853177547540, 
-    'right_s1': -0.30219421521342650, 
-    'right_e0':  0.45099035163831164, 
-    'right_e1':  1.78095169473496530,
-    'right_w0': -0.03604854851530722, 
-    'right_w1': -1.44922834935474460, 
-    'right_w2': -2.00567988016017830 
-}
-
-GRASP_POSE_LEFT = {
-    'left_s0': -0.63621853177547540, 
-    'left_s1': -0.30219421521342650, 
-    'left_e0': -0.45099035163831164, 
-    'left_e1':  1.78095169473496530,
-    'left_w0': -0.03604854851530722, 
-    'left_w1': -1.44922834935474460, 
-    'left_w2':  2.00567988016017830, 
-}
-
-STRAIGHTEN_UP_POSE_RIGHT = {
-    'right_s0':  0.8893253617765686, 
-    'right_s1': -0.8755195346855998,
-    'right_e0':  0.3834951969713534, 
-    'right_e1': -0.0494708804093045,    
-    'right_w0': -0.2132233295160725, 
-    'right_w1':  0.1399757468945440, 
-    'right_w2': -1.5876701154614032
-}
-
-STRAIGHTEN_UP_POSE_LEFT = {
-    'left_s0': -0.8893253617765686, 
-    'left_s1': -0.8755195346855998,
-    'left_e0': -0.3834951969713534, 
-    'left_e1': -0.0494708804093045,   
-    'left_w0': -0.2132233295160725, 
-    'left_w1':  0.1399757468945440, 
-    'left_w2':  1.5876701154614032
-}
-
-POSE_2_RIGHT = {    
-    'right_s0':  0.6691991187150117, 
-    'right_s1': -0.6189612479117644, 
-    'right_e0':  0.4594272459716814, 
-    'right_e1':  0.5464806556841787,
-    'right_w0': -3.0491703111192310, 
-    'right_w1': -1.5700293364007210, 
-    'right_w2': -1.6352235198858511
-}
-
-
-POSE_2_LEFT = {    
-    'left_s0': -0.6691991187150117, 
-    'left_s1': -0.6189612479117644, 
-    'left_e0': -0.4594272459716814, 
-    'left_e1':  0.5464806556841787,
-    'left_w0': -3.0491703111192310, 
-    'left_w1': -1.5700293364007210, 
-    'left_w2':  1.6352235198858511
-}
-
-REST_POSE_RIGHT = {
-    'right_s0':  0.6711165946998685, 
-    'right_s1': -0.2834029505618302, 
-    'right_e0':  0.1441941940612289, 
-    'right_e1':  1.3997574689454400,  
-    'right_w0': -3.0480198255283173, 
-    'right_w1': -0.4329660773806580, 
-    'right_w2': -1.8047283969471892, 
-}
-
-REST_POSE_LEFT = {
-    'left_s0': -0.6711165946998685, 
-    'left_s1': -0.2834029505618302, 
-    'left_e0': -0.1441941940612289, 
-    'left_e1':  1.3997574689454400,  
-    'left_w0': -3.0480198255283173, 
-    'left_w1': -0.4329660773806580, 
-    'left_w2':  1.8047283969471892, 
-}
-
-# STRAIGHTEN_WIDE_POSE_RIGHT = {
-    
-
-# }
-
-# STRAIGHTEN_WIDE_POSE_LEFT  = {
-    
-
-# }
-
-# Flip the sign for s0, e0, and w2 for the joint posture
-# However, this is not always the case
-# GRASP_POSE_LEFT = {
-#     'left_s0': -0.45099035163831164, 
-#     'left_s1': -0.16375244910676792
-#     'left_e0': -0.6768690226544388, 
-#     'left_e1':  1.7226604247953197, 
-#     'left_w0':  0.11466506389443468, 
-#     'left_w1': -1.26438366441455230, 
-#     'left_w2': -0.8091748656095558, 
-# }
-
-
-
+# Local Library, under moses/scripts
+from my_constants import Constants as C
 
 
 # [BACKUP]
@@ -164,27 +34,44 @@ REST_POSE_LEFT = {
  
 class BaxterControl( object ):
 
-    def __init__( self, arm_type = LEFT ):
-        
-        self.arm_type = arm_type
+    def __init__( self, record_data = False ):   # Using arm_type could be C.LEFT/C.RIGHT/C.BOTH
 
-        self.record_data = True # True or False
-
-        # Robot Control Objects
-        if   self.arm_type == RIGHT:
-            self.arm  = baxter_interface.limb.Limb( "right" )
-            self.kin  = baxter_kinematics(          "right" )
-            self.grip = baxter_interface.Gripper(   "right" )
-
-        elif self.arm_type == LEFT:
-            self.arm  = baxter_interface.limb.Limb( "left" )
-            self.kin  = baxter_kinematics(          "left" )
-            self.grip = baxter_interface.Gripper(   "left" )
-
-        self.arm_names = self.arm.joint_names( )
-        self.grip.set_holding_force( 0 )
+        self.record_data = record_data           # Boolean, data saved 
+                                                 # Just define the whole arms in the first place to simplify the code
+        self.arms        = range( 2 )            # Since we have both the left/right arms
+        self.kins        = range( 2 )            # Since we have both the left/right arms
+        self.grips       = range( 2 )            # Since we have both the left/right arms
 
 
+        # Saving the limb objects
+        for idx, name in enumerate( [ "right", "left" ] ):
+            self.arms[  idx ] = baxter_interface.limb.Limb( name )
+            self.kins[  idx ] = baxter_kinematics(          name )
+            self.grips[ idx ] = baxter_interface.Gripper(   name )
+
+            # Initialize the grippers holding force
+            self.grips[ idx ].set_holding_force( 0 )
+
+        self.robot_init( )  # Robot initialization
+
+        # Setting the rate of the robot
+        self.joint_publish_rate = 1000.0 # Hz      
+        self.controller_rate    = 1000.0 # Hz
+
+        # set joint state publishing to 1000Hz
+        # [REF] http://wiki.ros.org/rospy/Overview/Publishers%20and%20Subscribers
+        # self.joint_state_pub = rospy.Publisher('robot/joint_state_publish_rate', String, queue_size = 10 )
+        # self.joint_state_pub.publish( "hello" )   
+
+
+        if self.record_data:
+            time_now = time.strftime('%Y_%m_%d-%H_%M')
+            self.file_Q  = open( C.SAVE_DIR + 'Q_MotionCon_'  + time_now + '.txt', 'w')      
+     
+    
+    def robot_init( self ):
+
+        # Initialization of the robot
         # Enable Robot
         rospy.loginfo( "Getting robot state... " )
         self.rs = baxter_interface.RobotEnable( CHECK_VERSION )
@@ -193,46 +80,45 @@ class BaxterControl( object ):
         self.rs.enable()
 
 
-        if self.record_data:
-            time_now = time.strftime('%Y_%m_%d-%H_%M')
-            self.file_Q  = open('Q_MotionCon_'  + time_now + '.txt', 'w')             
-              
-    def move2grasp_pose( self ):
-        print( 'moving to pre-position..' )
+    def joint_impedances( self, pose1, pose2, D ):
+        # Inputting the joint inputs
+        # Given point
+        Kq = np.array( [ 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0 ] )
+        Bq = np.array( [ 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1 ] )
 
-        self.arm.set_joint_position_speed( 0.5 )    # Value range [0.0, 1.0], default 0.3
+        # Filling in the trajectory using minimum-jerk trajectory 
+
+    def print_pose( self, pose ):
+
+        # Print the joint data in specific order
+        if   all( "right" in s for s in pose.keys( ) ):
+            for name in C.RIGHT_JOINT_NAMES:
+                print( "Moving " + name + " to " + str( pose[ name ] ) )
+
+        elif all(  "left" in s for s in pose.keys( ) ):
+            for name in C.LEFT_JOINT_NAMES:
+                print( "Moving " + name + " to " + str( pose[ name ] ) )
+            
+
+    def move2pose( self, which_arm, pose, joint_speed = 0.1 ):
+
+        self.print_pose( pose )
 
 
-        start_time = rospy.Time.now()
-        time = 0.0
-        end_time = 20
-        update_rate = 1.0/60
-        update_time = 0
+        # If which_arm is neither 0 nor 1, assert
+        assert which_arm in [ C.RIGHT, C.LEFT] 
 
-        while time < end_time :
-            time = (rospy.Time.now() - start_time).to_sec()
+        if   which_arm == C.RIGHT:
+            # Need to check whether the names contain right on the pose
+            assert all( "right" in s for s in pose.keys( ) )
 
+        elif which_arm == C.LEFT:
 
-            if self.arm_type == RIGHT:
+            # Need to check whether the names contain left on the pose
+            assert all( "left" in s for s in pose.keys( ) )
 
-                if   time < 5:
-                    posture = REST_POSE_RIGHT
-                    self.arm.move_to_joint_positions( posture )
-                
-                elif time >10:
-
-                    posture = GRASP_POSE_RIGHT
-                    self.arm.move_to_joint_positions( posture )
-
- 
-            if self.record_data and time - update_time >= update_rate:
-                self.print_q( time )
-                update_time = time
-
-            elif self.arm_type == LEFT:
-                posture = REST_POSE_LEFT
-                self.arm.move_to_joint_positions( posture )
-
+        self.arms[ which_arm ].set_joint_position_speed( joint_speed )
+        self.arms[ which_arm ].move_to_joint_positions( pose )            
 
     def print_q( self, t ):
         q_current_dict = self.arm.joint_angles()
@@ -253,7 +139,8 @@ class BaxterControl( object ):
     def clean_shutdown(self):
 
         rospy.sleep(2)
-        self.arm.exit_control_mode()
+        for i in range( 2 ):
+            self.arms[ i ].exit_control_mode()
 
 
 def main():
@@ -261,13 +148,15 @@ def main():
     print("Initializing Controller Node... ")
     
     rospy.init_node("MY_BAXTER_CONTROL")
-    
-    ctrl = BaxterControl( arm_type = RIGHT )
+    ctrl = BaxterControl(  )
     rospy.on_shutdown( ctrl.clean_shutdown )
-    ctrl.move2grasp_pose( )
+
+    ctrl.move2pose( C.RIGHT, C.GRASP_POSE_RIGHT, joint_speed = 0.1 )
+    ctrl.move2pose( C.LEFT,  C.GRASP_POSE_LEFT , joint_speed = 0.1 )
+
     # ctrl.print_joints( )
     # ctrl.grip_command( )
-    print("Done")
+
 
 
 if __name__ == '__main__':
