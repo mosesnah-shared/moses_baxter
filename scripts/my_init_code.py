@@ -16,6 +16,8 @@ import numpy        as np
 import std_msgs.msg as msg 
 import threading
 import sys
+import argparse
+
 
 from   std_msgs.msg       import UInt16, Empty, String
 from   sensor_msgs.msg    import JointState
@@ -58,6 +60,8 @@ class Logger(object):
         # you might want to specify some extra behavior here.
         pass    
 
+
+
 def callback( data, start_time ):
     # For the JointState data, we have the following data
     # [1] position
@@ -78,7 +82,7 @@ def callback( data, start_time ):
             # Find index of the name
             try:
                 idx = data.name.index( name )
-                rospy.loginfo( "time = %.4f, name = %s,  value = %.5f", time, name, data.position[ idx ]  ) 
+                rospy.loginfo( "[time] [%.4f] [name] [%s] [value] [%.5f]", time, name, data.position[ idx ]  ) 
                 # if file is not None:
                     # file.write( "time = {}, name = {},  value = {}".format( time, name, data.position[ idx ] ) )
             except:
@@ -89,7 +93,7 @@ def callback( data, start_time ):
             # Find index of the name
             try:
                 idx = data.name.index( name )
-                rospy.loginfo( "time = %.4f, name = %s,  value = %.5f", time, name, data.position[ idx ]  ) 
+                rospy.loginfo( "[time] [%.4f] [name] [%s] [value] [%.5f]", time, name, data.position[ idx ]  ) 
                 # if file is not None:
                 #     file.write( "time = {%.4f}, name = {%s},  value = {%.5f}".format( time, name, data.position[ idx ] ) )
             except:
@@ -193,10 +197,19 @@ class BaxterControl( object ):
 
 def main():
     
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-s', '--save_data',    
+                        dest = 'record_data',   action = 'store_true',
+                        help = 'Save the Data')
+
+    args = parser.parse_args(rospy.myargv()[1:])
+
+
     print("Initializing Controller Node... ")
     
     rospy.init_node("MY_BAXTER_CONTROL")
-    ctrl = BaxterControl(  )
+    ctrl = BaxterControl( record_data = args.record_data )
     rospy.on_shutdown( ctrl.clean_shutdown )
 
     ctrl.joint_state_listener( )
