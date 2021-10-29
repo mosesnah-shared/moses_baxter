@@ -10,7 +10,7 @@ clear all; close all; clc; workspace;
 
 %% (--) Read Data
 result_dir = "../results/";
-file_name  = result_dir + "baxter_2021_10_29-13_50.txt";
+file_name  = result_dir + "side_displacement.txt";
 
 raw_data = my_txt_read( file_name );
 
@@ -25,6 +25,7 @@ for i = 1 : length( fn )
        plot( a, raw_data.( fn{ i } ).time, raw_data.( fn{ i } ).val )
     end
 end
+
 %%
 hold on
 % plot( raw_data.right_e0_q.time, raw_data.right_e0_diff.val )

@@ -46,7 +46,11 @@ function raw_data = my_txt_read( file_name )
                                                                            % (?<=\[) Look behind \[, e.g., (?<=B)A , Find expression A where expression B precedes
                                                                            % (?=\])  Look ahead  \], e.g., A(?=B)  , Find expression A where expression B follows
                                                                            % .+?, a nongreedy way of reading the line
-        % Within the tmp "cell", find the index of "name" and create the structure.
+        if isempty( tmp )
+            continue
+        end
+                                                                           
+                                                                           % Within the tmp "cell", find the index of "name" and create the structure.
         idx_name = find( contains( tmp, 'name'  ) );
         idx_time = find( contains( tmp, 'time'  ) );
         idx_val  = find( contains( tmp, 'value' ) );
