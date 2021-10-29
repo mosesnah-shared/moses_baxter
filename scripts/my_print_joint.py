@@ -41,6 +41,10 @@ class BaxterControl( object ):
         
         self.arm_type = arm_type
 
+        # Controller Rates
+        self.joint_publish_rate = 1000.0 # Hz
+        self.controller_rate    = 520.0 # Hz
+
         # Robot Control Objects
         if   self.arm_type == RIGHT:
             self.arm  = baxter_interface.limb.Limb( "right" )

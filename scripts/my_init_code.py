@@ -121,16 +121,22 @@ class BaxterControl( object ):
             # Initialize the grippers holding force
             self.grips[ idx ].set_holding_force( 0 )
 
-        self.robot_init( )  # Robot initialization
 
         # Setting the rate of the robot
         self.joint_publish_rate = 1000.0 # Hz      
-        self.controller_rate    = 1000.0 # Hz
+        self.controller_rate    =  500.0 # Hz
+        self.missed_cmds        =   20.0 # Missed cycles before triggering timeout
+
 
         # set joint state publishing to 1000Hz
         # [REF] http://wiki.ros.org/rospy/Overview/Publishers%20and%20Subscribers
-        # self.joint_state_pub = rospy.Publisher('robot/joint_state_publish_rate', String, queue_size = 10 )
+        self.joint_state_pub = rospy.Publisher('robot/joint_state_publish_rate', UInt16, queue_size = 10 )
         # self.joint_state_pub.publish( "hello" )   
+        self.joint_state_pub.publish( self.joint_publish_rate )
+
+
+        self.robot_init( )  # Robot initialization
+
 
         # print( data.position )
         # rospy.loginfo(rospy.get_caller_id() + "I heard %s", data.data)
@@ -153,13 +159,82 @@ class BaxterControl( object ):
         rospy.Subscriber( "robot/joint_states", JointState, callback, self.start_time )
 
 
+
     def joint_impedances( self, pose1, pose2, D ):
         # Inputting the joint inputs
         # Given point
-        Kq = np.array( [ 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0 ] )
-        Bq = np.array( [ 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1 ] )
+        Kq  =  0.002 * np.array( [   1,   1,   1,  1,  1,  1,  1 ] )
+        Bq  =  0.004 * np.array( [   1,   1,   1,  1,  1,  1,  1 ] )
 
+        rate = rospy.Rate( self.controller_rate )
+
+        self.joint_state_pub.publish(self.joint_publish_rate)
+
+        self.arms[ C.RIGHT ].set_command_timeout( (1.0 / self.joint_publish_rate) * self.missed_cmds )
+
+        # Get the initial time 
+        ts = rospy.Time.now().to_sec( )  
+        t  = ts
+
+        # print( t, ts, t-ts)
+        while t - ts <= 4:
+            t        = rospy.Time.now().to_sec() 
+            # print( t - ts)
+            q0 , dq0 = self.get_joint_ref_traj( pose1, pose2, D, t - ts ) 
+            q  , dq  = self.get_joint_current(  )                            # Get current joint postures and velociries
+        
+            tau      = np.multiply( np.squeeze( Kq ) , np.squeeze( q0 - q ) ) #- np.multiply( np.squeeze( Bq ), np.squeeze( dq ) )#+ np.multiply( np.squeeze( Bq ) , np.squeeze( dq0 - dq ) )   # Multiply is the hadamard product
+
+
+            for i in range( 7 ):
+                rospy.loginfo( "[time] [%.4f] [name] [%s] [value] [%.5f]", t - ts, C.RIGHT_JOINT_NAMES[ i ] + "_q0" , q0[ i ]  ) 
+                rospy.loginfo( "[time] [%.4f] [name] [%s] [value] [%.5f]", t - ts, C.RIGHT_JOINT_NAMES[ i ] + "_q"  , q[ i ]   ) 
+                rospy.loginfo( "[time] [%.4f] [name] [%s] [value] [%.5f]", t - ts, C.RIGHT_JOINT_NAMES[ i ] + "_tau", tau[ i ] ) 
+                rospy.loginfo( "[time] [%.4f] [name] [%s] [value] [%.5f]", t - ts, C.RIGHT_JOINT_NAMES[ i ] + "_diff", q0[ i ] - q[ i ] ) 
+
+
+            # print( t - ts )
+            # print( t - ts, tau )
+            # tau = np.clip( tau, -0.005, 0.005)
+            # print( t-ts, q0 - q, tau )
             
+
+            tmp = dict( zip( C.RIGHT_JOINT_NAMES, tau ) )
+            
+
+            # print( tmp) 
+            self.arms[ C.RIGHT ].set_joint_torques( tmp )
+            rate.sleep( )
+
+
+    def get_joint_current( self ):
+
+        # Get only the values of the joint
+        tmp_pos = self.arms[ C.RIGHT ].joint_angles( )
+        tmp_vel = self.arms[ C.RIGHT ].joint_velocities( )
+        return np.array( [ tmp_pos[ key ] for key in C.RIGHT_JOINT_NAMES ] ), np.array( [ tmp_vel[ key ] for key in C.RIGHT_JOINT_NAMES ] )
+
+
+    def get_joint_ref_traj( self, pose1, pose2, D, t ):
+        # Generate the joint trajectory for the control
+        # We can define a function handle
+
+        # First of all, get the values of the pose1, pose2 dictionary
+        pose_init  = np.array( [ pose1[ key ] for key in C.RIGHT_JOINT_NAMES ] )
+        pose_final = np.array( [ pose2[ key ] for key in C.RIGHT_JOINT_NAMES ] ) 
+
+        # Define the function that gets the time input, and
+        # Trim the t so that if it is higher than D, then set it as D
+        if t >= D:
+            t = D
+
+        tt = t/D  # Normalized time, tau is actually the notation but tau is reserved for torque
+
+        q0  = pose_init + ( pose_final - pose_init ) * (  10 * tt ** 3 - 15 * tt ** 4 +  6 * tt ** 5 )
+        dq0 =     1.0/D * ( pose_final - pose_init ) * (  30 * tt ** 2 - 60 * tt ** 3 + 30 * tt ** 4 )
+
+        return q0, dq0
+
 
     def move2pose( self, which_arm, pose, joint_speed = 0.1 ):
 
@@ -197,8 +272,8 @@ class BaxterControl( object ):
 
 def main():
     
-
-    parser = argparse.ArgumentParser()
+    arg_fmt = argparse.RawDescriptionHelpFormatter
+    parser  = argparse.ArgumentParser( formatter_class = arg_fmt )
     parser.add_argument('-s', '--save_data',    
                         dest = 'record_data',   action = 'store_true',
                         help = 'Save the Data')
@@ -212,12 +287,15 @@ def main():
     ctrl = BaxterControl( record_data = args.record_data )
     rospy.on_shutdown( ctrl.clean_shutdown )
 
-    ctrl.joint_state_listener( )
+    # ctrl.joint_state_listener( )
 
-    ctrl.move2pose( C.RIGHT, C.REST_POSE_RIGHT,  joint_speed = 1.0 )
-    ctrl.move2pose( C.RIGHT, C.GRASP_POSE_RIGHT, joint_speed = 1.0 )
+    ctrl.joint_impedances( C.REST_POSE_RIGHT, C.REST_POSE_RIGHT, 3.0 )
+    # ctrl.move2pose( C.LEFT , C.MID_POSE_LEFT,   joint_speed = 0.3 )
+    # ctrl.move2pose( C.RIGHT , C.REST_POSE_RIGHT,   joint_speed = 0.3 )
+    # ctrl.move2pose( C.LEFT  , C.REST_POSE_LEFT ,   joint_speed = 0.3 )
+
+    # ctrl.move2pose( C.RIGHT, C.GRASP_POSE_RIGHT_WIDER,  joint_speed = 0.3 )
     # ctrl.move2pose( C.LEFT,  C.GRASP_POSE_LEFT , joint_speed = 0.3 )
-
     # ctrl.print_joints( )
     # ctrl.grip_command( )
 
@@ -225,3 +303,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+ 
