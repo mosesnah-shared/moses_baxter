@@ -1,6 +1,8 @@
 import time
 import sys
 
+from my_constants import Constants as C
+
 class Logger(object):
     def __init__(self, record_data = False):
         self.record_data = record_data

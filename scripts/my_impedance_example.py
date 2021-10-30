@@ -3,45 +3,27 @@
 # Source code from following:
 # [REF] https://github.com/tony1994513/Impedance-control/blob/master/impedcontol.py
 
-import baxter_interface
+
 import argparse
 import time
 import rospy
 import numpy as np
 import sys
 
-from std_msgs.msg               import Empty 
-from baxter_interface           import CHECK_VERSION
-from baxter_pykdl               import baxter_kinematics
-from sensor_msgs.msg            import JointState
+# BAXTER Libraries
+import baxter_interface
+import baxter_external_devices          # For keyboard interrupt
+from   baxter_interface           import CHECK_VERSION
+from   baxter_pykdl               import baxter_kinematics
 
+# Ros related Libraries
+from std_msgs.msg                 import Empty 
+from sensor_msgs.msg              import JointState
 
 # Local Library, under moses/scripts
 from my_constants import Constants as C
 from my_utils     import Logger
 
-class Logger(object):
-    def __init__(self, record_data = False):
-        self.record_data = record_data
-        self.terminal    = sys.stdout
-
-        if record_data == True:  
-            time_now         = time.strftime( '%Y_%m_%d-%H_%M' )                 # Redirecting the stdout to file
-            self.log = open( C.SAVE_DIR + 'baxter_'  + time_now + '.txt' , 'w')
-        else:
-            self.log = None
-   
-    def write(self, message ):
-        self.terminal.write( message )
-
-        if self.log is not None:
-            self.log.write( message )  
-
-    def flush(self):
-        # this flush method is needed for python 3 compatibility.
-        # this handles the flush command by doing nothing.
-        # you might want to specify some extra behavior here.
-        pass    
 
 def callback( data, start_time ):
     # For the JointState data, we have the following data
@@ -92,7 +74,7 @@ class JointImpedanceControl( object ):
         self.grips       = range( 2 )            # Since we have both the left/right arms
 
         self.start_time  = rospy.Time.now()
-        self.T_max       = 30                   # The maximum run time for the robot. 
+        self.T_MAX       = 30                    # The maximum run time for the robot, current
 
         # Saving the limb objects
         for idx, name in enumerate( [ "right", "left" ] ):
@@ -100,35 +82,17 @@ class JointImpedanceControl( object ):
             self.kins[  idx ] = baxter_kinematics(          name )
             self.grips[ idx ] = baxter_interface.Gripper(   name )
 
-            # Initialize the grippers holding force
-            self.grips[ idx ].set_holding_force( 0 )
+            self.grips[ idx ].set_holding_force( 100 )  # Initialize the grippers holding force
+            self.grips[ idx ].open(  block = False )    # Open the gripper too
 
 
-
-        # self._rKin = baxter_kinematics('right')
-
-                                    # control parameters
+                                   # control parameters
         self.rate        = 1000.0  # Hz
         self.missed_cmds = 20.0    # Missed cycles before triggering timeout
 
-
-        # self._update_parameters()    
-        self.Kq = { 'right_s0': 10.0, 
-                    'right_s1': 15.0, 
-                    'right_w0': 3.0, 
-                    'right_w1': 2.0, 
-                    'right_w2': 1.5, 
-                    'right_e0': 5.0,  
-                    'right_e1': 5.0 } 
-
-
-        self.Bq = { 'right_s0': 2, 
-                    'right_s1': 3.0, 
-                    'right_w0': 0.6, 
-                    'right_w1': 0.4,
-                    'right_w2': 0.3, 
-                    'right_e0': 1.0, 
-                    'right_e1': 1.0 } 
+        # Impedance Parameters for Case 1 
+        self.Kq = C.JOINT_IMP1_Kq
+        self.Bq = C.JOINT_IMP1_Bq
 
         self.robot_init( )
         sys.stdout = Logger( record_data = record_data ) 
@@ -145,31 +109,33 @@ class JointImpedanceControl( object ):
         
         print("Running. Ctrl-c to quit")
 
-    def update_torques(self):
-        """
-            Calculates the current angular difference between the start position
-            and the current joint positions applying the joint torque spring forces
-            as defined on the dynamic reconfigure server.
-        """
-        tau = dict()
-        
-        q  = self.arms[ C.RIGHT ].joint_angles()
-        dq = self.arms[ C.RIGHT ].joint_velocities()
 
+    def get_reference_traj( self, pose1, pose2, D, t  ):
+        """ 
+            Get the reference trajectory, the basis function is the minimum jerk trajectory
+        """
+
+        q0  = dict( )   # Making  q0 as a dictionary
+        dq0 = dict( )   # Making dq0 as a dictionary 
+
+
+        # Iterate through the joints
         for joint in C.RIGHT_JOINT_NAMES:
-           
-            tau[ joint ]  =   self.Kq[ joint ] * ( self.q0[ joint ] - q[ joint ] )   # spring portion
-            tau[ joint ] += - self.Bq[ joint ] * dq[ joint ]                                     # damping portion
-        
-        self.arms[ C.RIGHT ].set_joint_torques( tau )
 
-    def start_impedance(self):
-        """
-            Switches to joint torque mode and attached joint springs to current joint positions.
-        """
 
-        # Maintaining the given posture
-        self.q0 = self.arms[ C.RIGHT ].joint_angles()
+            tt = t/D if t<=D else 1     # Normalized time as tt, tau is actually the notation but tau is reserved for torque
+                                        # If duration bigger than time t than set tt as 1
+
+            q0[  joint ] = pose1[ joint ] + ( pose2[ joint ] - pose1[ joint ] ) * (  10 * tt ** 3 - 15 * tt ** 4 +  6 * tt ** 5 )
+            dq0[ joint ] =          1.0/D * ( pose2[ joint ] - pose1[ joint ] ) * (  30 * tt ** 2 - 60 * tt ** 3 + 30 * tt ** 4 )
+     
+        return q0, dq0 
+
+    def joint_impedance( self, pose1, pose2, D, t_total ):
+        """
+            start_impedance joint controller, from pose1 to pose2 reference trajectory
+            t_total is for the time the controller runs
+        """
 
         # set control rate
         control_rate = rospy.Rate( self.rate )
@@ -179,13 +145,38 @@ class JointImpedanceControl( object ):
         # will timeout and disable
         self.arms[ C.RIGHT ].set_command_timeout( ( 1.0 / self.rate) * self.missed_cmds)
 
+        ts = rospy.Time.now()
+        t  = 0                  # Elapsed time
+
         # loop at specified rate commanding new joint torques
-        while not rospy.is_shutdown() and ( rospy.Time.now() - self.start_time ).to_sec( ) <= self.T_max: 
+        while not rospy.is_shutdown() and t <= t_total: 
             if not self.rs.state().enabled:
                 rospy.logerr("impedance example failed to meet, specified control rate timeout.")
                 break
 
-            self.update_torques()
+            t = ( rospy.Time.now( ) - ts ).to_sec( )        # The elapsed time of the simulatoin
+
+            q0, dq0 = self.get_reference_traj( pose1, pose2, D, t )
+
+            # self.update_torques()
+            tau = dict()
+            
+            q   = self.arms[ C.RIGHT ].joint_angles()
+            dq  = self.arms[ C.RIGHT ].joint_velocities()
+
+            for joint in C.RIGHT_JOINT_NAMES:
+               
+                tau[ joint ]  =   self.Kq[ joint ] * (  q0[ joint ] -  q[ joint ] )   # The Stiffness portion
+                tau[ joint ] +=   self.Bq[ joint ] * ( dq0[ joint ] - dq[ joint ] )   # The Damping   portion
+                
+                if self.record_data:
+                    rospy.loginfo( "[time] [%.4f] [name] [%s] [value] [%.5f]", t, joint + "_q0"  ,  q0[ joint ]  ) 
+                    rospy.loginfo( "[time] [%.4f] [name] [%s] [value] [%.5f]", t, joint + "_q"   ,   q[ joint ]  ) 
+                    rospy.loginfo( "[time] [%.4f] [name] [%s] [value] [%.5f]", t, joint + "_tau" , tau[ joint ]  ) 
+
+
+            self.arms[ C.RIGHT ].set_joint_torques( tau )
+
             control_rate.sleep()
 
     def move2pose( self, which_arm, pose, joint_speed = 0.1 ):
@@ -210,6 +201,63 @@ class JointImpedanceControl( object ):
         # rospy.init_node( 'my_listener', anonymous = False )
         rospy.Subscriber( "robot/joint_states", JointState, callback, self.start_time )
 
+
+    def control_gripper( self , mode = "timer"):
+        """
+            There are two modes to do the controller of the gripper, simple time wait or keyboard
+        """
+        if   mode == "timer":
+
+            rospy.sleep( 5 )
+
+            self.grips[ C.RIGHT ].close(  block = False )   
+            self.grips[ C.LEFT  ].close(  block = False )
+
+            rospy.sleep( 5 )
+
+        elif mode == "keyboard":
+
+            # Control the gripper via keyboard command
+            DONE = False
+
+            left_open  = True
+            right_open = True
+
+            while not DONE :
+                c = baxter_external_devices.getch()     # Get the char input from the Keyboard
+                if c:
+
+                    #catch Esc or ctrl-c
+                    if c in ['\x1b', '\x03']:
+                        DONE = True
+                        rospy.signal_shutdown("Reading Joint Data finished.")
+
+                    if c == "l":
+                        if left_open == True: 
+                            self.grips[ C.LEFT  ].open(   block = False )
+
+                        else:
+                            self.grips[ C.LEFT  ].close(  block = False )
+
+                        # Flip the boolean value
+                        left_open = not left_open
+
+                    if c == "r":
+                        if right_open == True:
+                            self.grips[ C.RIGHT ].open(   block = False )
+
+                        else:
+                            self.grips[ C.RIGHT ].close(  block = False )
+
+                        # Flip the boolean value
+                        right_open = not right_open
+
+                    if c== "d":
+                        DONE = True
+                        rospy.loginfo( "Gripper Done"  ) 
+             
+
+
     def clean_shutdown(self):
         """
             Switches out of joint torque mode to exit cleanly
@@ -233,7 +281,12 @@ def main():
                         dest = 'record_data',   action = 'store_true',
                         help = 'Save the Data')
 
-    args = parser.parse_args(rospy.myargv()[1:])
+    parser.add_argument('-g', '--gripper_on',    
+                        dest = 'gripper_on',    action = 'store_true',
+                        help = 'Turn on Gripper')
+
+
+    args = parser.parse_args( rospy.myargv( )[ 1: ] ) 
 
     print("Initializing node... ")
     rospy.init_node("impedance_control_right" )
@@ -241,10 +294,50 @@ def main():
 
     rospy.on_shutdown( my_baxter.clean_shutdown )
 
-    my_baxter.joint_state_listener( )
+    # my_baxter.joint_state_listener( )
 
-    my_baxter.move2pose( C.RIGHT, C.GRASP_POSE_RIGHT_WIDER, 0.3 )
-    my_baxter.start_impedance()
+    if args.gripper_on:
+        # If gripper on, move the joints to the grasp_posture
+        my_baxter.move2pose( C.RIGHT, C.GRASP_POSE_RIGHT_WIDER, joint_speed = 0.3 )
+        my_baxter.move2pose( C.LEFT , C.GRASP_POSE_LEFT_WIDER , joint_speed = 0.3 )
+
+        # Wait gripper to be on, using keyboard interrupt 
+
+        # [Moses C. Nah] [Log] [2021.10.30]
+        # Need improvement for the gripper code but still cannot find the reason
+        # The problem is the gripper always need calibration, and even though it worked, we need to run launch file.
+        # There will be a way to automate this process
+
+        my_baxter.control_gripper( mode = "keyboard" )
+
+
+    else:
+        # #
+        # my_baxter.move2pose( C.RIGHT, C.REST_POSE_RIGHT ,        joint_speed = 0.3 )
+        # rospy.sleep( 1.0 )
+        # my_baxter.move2pose( C.RIGHT, C.MID_POSE_RIGHT  ,        joint_speed = 0.3 )
+        # rospy.sleep( 1.0 )
+        # my_baxter.move2pose( C.RIGHT, C.REST_POSE_RIGHT ,        joint_speed = 0.3 )
+        # rospy.sleep( 1.0 )
+
+        # my_baxter.move2pose( C.LEFT, C.REST_POSE_LEFT ,        joint_speed = 0.3 )
+        # rospy.sleep( 1.0 )
+        # my_baxter.move2pose( C.LEFT, C.MID_POSE_LEFT  ,        joint_speed = 0.3 )
+        # rospy.sleep( 1.0 )
+        # my_baxter.move2pose( C.LEFT, C.REST_POSE_LEFT ,        joint_speed = 0.3 )
+        # rospy.sleep( 1.0 )
+
+        # my_baxter.move2pose( C.RIGHT, C.REST_POSE_RIGHT ,  joint_speed = 0.3 )
+        D    = 1
+        toff = 1
+        my_baxter.move2pose( C.RIGHT, C.REST_POSE_RIGHT ,  joint_speed = 0.3 )
+        my_baxter.control_gripper( mode = "timer" )
+
+        rospy.sleep( 1 )
+        my_baxter.joint_impedance(  C.REST_POSE_RIGHT  ,  C.MID_POSE_RIGHT  , D, D + 1 )
+        my_baxter.joint_impedance(  C.MID_POSE_RIGHT   ,  C.REST_POSE_RIGHT , D, D + 4 )
+
+
 
 if __name__ == "__main__":
     main()

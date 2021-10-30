@@ -92,6 +92,9 @@ class BaxterControl( object ):
         rospy.sleep( 1 )
         self.arm.exit_control_mode()
 
+        if not self.init_state and self.rs.state().enabled:
+            # print( "Disabling robot..." )
+            self.rs.disable()
 
 def main():
     
