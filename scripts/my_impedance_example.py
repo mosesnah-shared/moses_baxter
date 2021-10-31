@@ -82,6 +82,12 @@ class JointImpedanceControl( object ):
             self.kins[  idx ] = baxter_kinematics(          name )
             self.grips[ idx ] = baxter_interface.Gripper(   name )
 
+            # Initialize the gripper
+            # [MOSES] [2021.10.31]
+            # There might be a way to initialize the gripper rather than running ''roslaunch moses gripper_setup.launch''.
+            # Hence, leaving the comments here for future task. Refer to ``gripper_cuff_control.py'' and ``gripper_setup.launch''.
+            # self.grips[ idx ].on_type_changed.connect( self.check_calibration )
+
             self.grips[ idx ].set_holding_force( 100 )  # Initialize the grippers holding force
             self.grips[ idx ].open(  block = False )    # Open the gripper too
 
@@ -91,12 +97,14 @@ class JointImpedanceControl( object ):
         self.missed_cmds = 20.0    # Missed cycles before triggering timeout
 
         # Impedance Parameters for Case 1 
-        self.Kq = C.JOINT_IMP1_Kq
-        self.Bq = C.JOINT_IMP1_Bq
+        # self.Kq = C.JOINT_IMP1_Kq
+        # self.Bq = C.JOINT_IMP1_Bq
+
+        self.Kq = C.JOINT_IMP2_Kq
+        self.Bq = C.JOINT_IMP2_Bq
 
         self.robot_init( )
         sys.stdout = Logger( record_data = record_data ) 
-
 
     def robot_init( self ):
         print("Getting robot state... ")
@@ -109,92 +117,166 @@ class JointImpedanceControl( object ):
         
         print("Running. Ctrl-c to quit")
 
+    # [BACKUP] For initializing the cuff 
+    # def check_calibration( self, value ):
+    #     # if self._gripper.calibrated():
+    #     return True
+    #     # else:
+    #     #     return False
 
-    def get_reference_traj( self, pose1, pose2, D, t  ):
+    def get_reference_traj( self, which_arm, pose1, pose2, D, t  ):
         """ 
             Get the reference trajectory, the basis function is the minimum jerk trajectory
         """
+        assert which_arm in [ C.RIGHT, C.LEFT ] 
 
-        q0  = dict( )   # Making  q0 as a dictionary
-        dq0 = dict( )   # Making dq0 as a dictionary 
+        q0  = dict( )                                   # Making  q0 as a dictionary
+        dq0 = dict( )                                   # Making dq0 as a dictionary 
 
+        pose1 = self.pose_gen( which_arm, pose1 )       # Regenerating the pose 
+        pose2 = self.pose_gen( which_arm, pose2 )       # Regenerating the pose 
+
+        limb  = C.LIMB_NAMES[ which_arm ] 
 
         # Iterate through the joints
-        for joint in C.RIGHT_JOINT_NAMES:
+        for joint in C.JOINT_NAMES:
 
+            joint_name = limb + "_" + joint             # [Example] "right_s0"
 
             tt = t/D if t<=D else 1     # Normalized time as tt, tau is actually the notation but tau is reserved for torque
                                         # If duration bigger than time t than set tt as 1
 
-            q0[  joint ] = pose1[ joint ] + ( pose2[ joint ] - pose1[ joint ] ) * (  10 * tt ** 3 - 15 * tt ** 4 +  6 * tt ** 5 )
-            dq0[ joint ] =          1.0/D * ( pose2[ joint ] - pose1[ joint ] ) * (  30 * tt ** 2 - 60 * tt ** 3 + 30 * tt ** 4 )
+            q0[  joint_name ] = pose1[ joint_name ] + ( pose2[ joint_name ] - pose1[ joint_name ] ) * (  10 * tt ** 3 - 15 * tt ** 4 +  6 * tt ** 5 )
+            dq0[ joint_name ] =               1.0/D * ( pose2[ joint_name ] - pose1[ joint_name ] ) * (  30 * tt ** 2 - 60 * tt ** 3 + 30 * tt ** 4 )
      
         return q0, dq0 
 
-    def joint_impedance( self, pose1, pose2, D, t_total ):
-        """
-            start_impedance joint controller, from pose1 to pose2 reference trajectory
-            t_total is for the time the controller runs
-        """
+    def joint_impedance( self, which_arm, poses, Ds = None, toffs = None):
+            
+        control_rate = rospy.Rate( self.rate )             # set control rate
+        assert which_arm in [ C.RIGHT, C.LEFT, C.BOTH ]    # If which_arm is C.BOTH, then we are moving both the left and right arm 
 
-        # set control rate
-        control_rate = rospy.Rate( self.rate )
+        # Making it as a list
+        Ds    = [ Ds    ] if isinstance(    Ds , float ) or isinstance(    Ds , int ) else    Ds
+        toffs = [ toffs ] if isinstance( toffs , float ) or isinstance( toffs , int ) else toffs
+
 
         # for safety purposes, set the control rate command timeout.
-        # if the specified number of command cycles are missed, the robot
-        # will timeout and disable
+        # if the specified number of command cycles are missed, the robot will timeout and disable
+        # Regardless of which_arm, setting both the left and right arm set_command
         self.arms[ C.RIGHT ].set_command_timeout( ( 1.0 / self.rate) * self.missed_cmds)
+        self.arms[ C.LEFT  ].set_command_timeout( ( 1.0 / self.rate) * self.missed_cmds)
 
-        ts = rospy.Time.now()
-        t  = 0                  # Elapsed time
 
-        # loop at specified rate commanding new joint torques
-        while not rospy.is_shutdown() and t <= t_total: 
-            if not self.rs.state().enabled:
-                rospy.logerr("impedance example failed to meet, specified control rate timeout.")
-                break
+        N  = len( poses )
+        assert N > 1                    # N should be bigger than 1, since we need at least initial - final posture of the impedance controller
 
-            t = ( rospy.Time.now( ) - ts ).to_sec( )        # The elapsed time of the simulatoin
+        for i in range( N - 1 ):        # Iterating along the poses of the impedance controller
 
-            q0, dq0 = self.get_reference_traj( pose1, pose2, D, t )
+            ts = rospy.Time.now()
+            t  = 0                      # Elapsed time
 
-            # self.update_torques()
-            tau = dict()
+            while not rospy.is_shutdown() and t <= Ds[ i ] + toffs[ i ]: 
             
-            q   = self.arms[ C.RIGHT ].joint_angles()
-            dq  = self.arms[ C.RIGHT ].joint_velocities()
+                if not self.rs.state().enabled:
+                    rospy.logerr("impedance example failed to meet, specified control rate timeout.")
+                    break
 
-            for joint in C.RIGHT_JOINT_NAMES:
-               
-                tau[ joint ]  =   self.Kq[ joint ] * (  q0[ joint ] -  q[ joint ] )   # The Stiffness portion
-                tau[ joint ] +=   self.Bq[ joint ] * ( dq0[ joint ] - dq[ joint ] )   # The Damping   portion
-                
-                if self.record_data:
-                    rospy.loginfo( "[time] [%.4f] [name] [%s] [value] [%.5f]", t, joint + "_q0"  ,  q0[ joint ]  ) 
-                    rospy.loginfo( "[time] [%.4f] [name] [%s] [value] [%.5f]", t, joint + "_q"   ,   q[ joint ]  ) 
-                    rospy.loginfo( "[time] [%.4f] [name] [%s] [value] [%.5f]", t, joint + "_tau" , tau[ joint ]  ) 
+                t = ( rospy.Time.now( ) - ts ).to_sec( )        # The elapsed time of the simulatoin
+
+                tau_R = dict( )
+                tau_L = dict( )
+
+                q0_R, dq0_R = self.get_reference_traj( C.RIGHT, poses[ i ], poses[ i + 1 ], Ds[ i ], t )
+                q0_L, dq0_L = self.get_reference_traj( C.LEFT , poses[ i ], poses[ i + 1 ], Ds[ i ], t )
+
+                q_R   = self.arms[ C.RIGHT ].joint_angles()
+                dq_R  = self.arms[ C.RIGHT ].joint_velocities()
+
+                q_L   = self.arms[ C.LEFT  ].joint_angles()
+                dq_L  = self.arms[ C.LEFT  ].joint_velocities()
+
+                for joint in C.JOINT_NAMES:
+
+                    right_name = "right_" + joint             # [Example] "right_s0"
+                    left_name  =  "left_" + joint             # [Example] "left_s0"
+
+                    tau_R[ right_name ]  =  self.Kq[ joint ] * (  q0_R[ right_name ] -  q_R[ right_name ] )   # The Stiffness portion
+                    tau_R[ right_name ] +=  self.Bq[ joint ] * ( dq0_R[ right_name ] - dq_R[ right_name ] )   # The Damping   portion
+
+                    tau_L[ left_name ]   =  self.Kq[ joint ] * (  q0_L[  left_name ] -  q_L[  left_name ] )   # The Stiffness portion
+                    tau_L[ left_name ]  +=  self.Bq[ joint ] * ( dq0_L[  left_name ] - dq_L[  left_name ] )   # The Damping   portion
+                    
+                    if self.record_data:
+                        rospy.loginfo( "[time] [%.4f] [name] [%s] [value] [%.5f]", t, right_name + "_q0"  ,  q0_R[ right_name ]  ) 
+                        rospy.loginfo( "[time] [%.4f] [name] [%s] [value] [%.5f]", t, right_name + "_q"   ,   q_R[ right_name ]  ) 
+                        rospy.loginfo( "[time] [%.4f] [name] [%s] [value] [%.5f]", t, right_name + "_dq0" , dq0_R[ right_name ]  ) 
+                        rospy.loginfo( "[time] [%.4f] [name] [%s] [value] [%.5f]", t, right_name + "_dq"  ,  dq_R[ right_name ]  ) 
+                        rospy.loginfo( "[time] [%.4f] [name] [%s] [value] [%.5f]", t, right_name + "_tau" , tau_R[ right_name ]  ) 
+
+                        rospy.loginfo( "[time] [%.4f] [name] [%s] [value] [%.5f]", t, left_name + "_q0"  ,  q0_L[ left_name  ]  ) 
+                        rospy.loginfo( "[time] [%.4f] [name] [%s] [value] [%.5f]", t, left_name + "_q"   ,   q_L[ left_name  ]  ) 
+                        rospy.loginfo( "[time] [%.4f] [name] [%s] [value] [%.5f]", t, left_name + "_dq0" , dq0_L[ left_name ]  ) 
+                        rospy.loginfo( "[time] [%.4f] [name] [%s] [value] [%.5f]", t, left_name + "_dq"  ,  dq_L[ left_name ]  ) 
+                        rospy.loginfo( "[time] [%.4f] [name] [%s] [value] [%.5f]", t, left_name + "_tau" , tau_L[ left_name ]  ) 
+
+                    if   which_arm == C.RIGHT:
+
+                        self.arms[ C.RIGHT ].set_joint_torques( tau_R )
+                    
+                    elif which_arm == C.LEFT:
+
+                        self.arms[ C.LEFT  ].set_joint_torques( tau_L )
+                    
+                    elif which_arm == C.BOTH:
+
+                        self.arms[ C.RIGHT ].set_joint_torques( tau_R )
+                        self.arms[ C.LEFT  ].set_joint_torques( tau_L )
+                        
+                    else:
+                        NotImplementedError( )
 
 
-            self.arms[ C.RIGHT ].set_joint_torques( tau )
+                control_rate.sleep()
 
-            control_rate.sleep()
 
-    def move2pose( self, which_arm, pose, joint_speed = 0.1 ):
+    def pose_gen( self, which_arm, old_pose ):
 
-        # If which_arm is neither 0 nor 1, assert
-        assert which_arm in [ C.RIGHT, C.LEFT] 
+        assert which_arm in [ C.RIGHT, C.LEFT ] 
+
+        new_pose = dict( )
 
         if   which_arm == C.RIGHT:
-            # Need to check whether the names contain right on the pose
-            assert all( "right" in s for s in pose.keys( ) )
+            for name in C.JOINT_NAMES:
+                new_pose[ "right_" + name ] = old_pose[ name ]
 
         elif which_arm == C.LEFT:
+            for name in C.JOINT_NAMES:
+                if name in C.JOINT_TO_FLIP:
+                    new_pose[ "left_" + name ] = -old_pose[ name ]
+                else:
+                    new_pose[ "left_" + name ] =  old_pose[ name ]
+            
+        else:
+            NotImplementedError( )
 
-            # Need to check whether the names contain left on the pose
-            assert all( "left" in s for s in pose.keys( ) )
+        return new_pose
 
-        self.arms[ which_arm ].set_joint_position_speed( joint_speed )
-        self.arms[ which_arm ].move_to_joint_positions( pose )     
+    def move2pose( self, which_arm, poses, wait_time = 1, joint_speed = 0.1 ):
+
+        # If which_arm is neither 0 nor 1, assert
+        # Iterate along the poses
+
+        # If single dictionary element, then make it as a list
+        poses = [ poses ] if isinstance( poses , dict ) else poses
+
+        for idx, pose in enumerate( poses ):
+            pose = self.pose_gen( which_arm, pose )
+
+            self.arms[ which_arm ].set_joint_position_speed( joint_speed )
+            self.arms[ which_arm ].move_to_joint_positions( pose )  
+
+            rospy.sleep( wait_time )   
 
     def joint_state_listener( self ):
         
@@ -297,45 +379,35 @@ def main():
     # my_baxter.joint_state_listener( )
 
     if args.gripper_on:
-        # If gripper on, move the joints to the grasp_posture
-        my_baxter.move2pose( C.RIGHT, C.GRASP_POSE_RIGHT_WIDER, joint_speed = 0.3 )
-        my_baxter.move2pose( C.LEFT , C.GRASP_POSE_LEFT_WIDER , joint_speed = 0.3 )
 
-        # Wait gripper to be on, using keyboard interrupt 
+        #  Can put arrays of pose                                    
+        my_baxter.move2pose( C.RIGHT, [ C.REST_POSE, C.GRASP_POSE_WIDER, C.WIDE_POSE, C.REST_POSE], wait_time = 1, joint_speed = 0.3 )
+        # my_baxter.move2pose( C.LEFT , [ C.REST_POSE, C.GRASP_POSE_WIDER, C.WIDE_POSE, C.REST_POSE], wait_time = 1, joint_speed = 0.3 )
+
 
         # [Moses C. Nah] [Log] [2021.10.30]
         # Need improvement for the gripper code but still cannot find the reason
         # The problem is the gripper always need calibration, and even though it worked, we need to run launch file.
         # There will be a way to automate this process
-
-        my_baxter.control_gripper( mode = "keyboard" )
+        # my_baxter.control_gripper( mode = "keyboard" )
 
 
     else:
-        # #
-        # my_baxter.move2pose( C.RIGHT, C.REST_POSE_RIGHT ,        joint_speed = 0.3 )
-        # rospy.sleep( 1.0 )
-        # my_baxter.move2pose( C.RIGHT, C.MID_POSE_RIGHT  ,        joint_speed = 0.3 )
-        # rospy.sleep( 1.0 )
-        # my_baxter.move2pose( C.RIGHT, C.REST_POSE_RIGHT ,        joint_speed = 0.3 )
-        # rospy.sleep( 1.0 )
 
-        # my_baxter.move2pose( C.LEFT, C.REST_POSE_LEFT ,        joint_speed = 0.3 )
-        # rospy.sleep( 1.0 )
-        # my_baxter.move2pose( C.LEFT, C.MID_POSE_LEFT  ,        joint_speed = 0.3 )
-        # rospy.sleep( 1.0 )
-        # my_baxter.move2pose( C.LEFT, C.REST_POSE_LEFT ,        joint_speed = 0.3 )
-        # rospy.sleep( 1.0 )
+        # rospy.sleep( 1 )
+        # my_baxter.joint_impedance( C.RIGHT, [ C.REST_POSE, C.GRASP_POSE_WIDER, C.REST_POSE  ] , Ds = [2,2], toffs = [5,5]  )
+        # my_baxter.move2pose( C.LEFT , C.REST_POSE, wait_time = 1, joint_speed = 0.3 )
+        # my_baxter.move2pose( C.LEFT,  C.MID_POSE, wait_time = 1, joint_speed = 0.3 )
+        # my_baxter.move2pose( C.LEFT , C.REST_POSE, wait_time = 1, joint_speed = 0.3 )
+        my_baxter.move2pose( C.LEFT, C.REST_POSE, wait_time = 1, joint_speed = 0.3 )
+        my_baxter.move2pose( C.RIGHT, C.REST_POSE, wait_time = 1, joint_speed = 0.3 )
 
-        # my_baxter.move2pose( C.RIGHT, C.REST_POSE_RIGHT ,  joint_speed = 0.3 )
-        D    = 1
-        toff = 1
-        my_baxter.move2pose( C.RIGHT, C.REST_POSE_RIGHT ,  joint_speed = 0.3 )
         my_baxter.control_gripper( mode = "timer" )
 
-        rospy.sleep( 1 )
-        my_baxter.joint_impedance(  C.REST_POSE_RIGHT  ,  C.MID_POSE_RIGHT  , D, D + 1 )
-        my_baxter.joint_impedance(  C.MID_POSE_RIGHT   ,  C.REST_POSE_RIGHT , D, D + 4 )
+        # my_baxter.joint_impedance(   C.LEFT, [ C.REST_POSE, C.MID_POSE, C.REST_POSE  ] , Ds = [2.0,2.0], toffs = [0.4,3]  )
+        my_baxter.joint_impedance(  C.BOTH, [ C.REST_POSE, C.MID_POSE, C.REST_POSE  ] , Ds = [1.0,1.0], toffs = [0.4,3]  )
+
+        # my_baxter.joint_impedance(  C.MID_POSE_RIGHT   ,  C.REST_POSE_RIGHT , D, D + 4 )
 
 
 
