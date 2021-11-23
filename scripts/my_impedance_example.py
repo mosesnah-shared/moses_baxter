@@ -400,8 +400,11 @@ def main():
         # my_baxter.move2pose( C.LEFT,  C.MID_POSE, wait_time = 1, joint_speed = 0.3 )
         # my_baxter.move2pose( C.LEFT , C.REST_POSE, wait_time = 1, joint_speed = 0.3 )
 
-        my_baxter.move2pose( C.LEFT , C.GRASP_POSE, wait_time = 1, joint_speed = 0.3 )
-        my_baxter.move2pose( C.RIGHT, C.GRASP_POSE, wait_time = 1, joint_speed = 0.3 )
+        # my_baxter.move2pose( C.LEFT , C.GRASP_POSE, wait_time = 1, joint_speed = 0.3 )
+        # my_baxter.move2pose( C.RIGHT, C.GRASP_POSE, wait_time = 1, joint_speed = 0.3 )
+
+        my_baxter.move2pose( C.LEFT , C.REST_POSE, wait_time = 1, joint_speed = 0.3 )
+        my_baxter.move2pose( C.RIGHT, C.REST_POSE, wait_time = 1, joint_speed = 0.3 )
 
         # my_baxter.move2pose( C.RIGHT, C.GRASP_POSE_2, wait_time = 1, joint_speed = 0.3 )
         # my_baxter.move2pose( C.LEFT , C.GRASP_POSE_2, wait_time = 1, joint_speed = 0.3 )

@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <package format="2">
-  <name>moses</name>
+  <name>moses-baxter</name>
   <version>0.0.0</version>
   <description>The moses package</description>
 
