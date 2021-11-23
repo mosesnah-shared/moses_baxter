@@ -10,7 +10,7 @@ import glob                                 # Used to get retrieve files that ha
 import pickle                               # For saving the camera variables
 
                                             # Path to the image that you want to undistort
-PATH                   = "../../Images/GESMA_webcam/"
+PATH                   = "./Images/GESMA_webcam/"
 distorted_img_filename = PATH + "distorted_test2.png"
 
                                             # [Chessboard dimensions]

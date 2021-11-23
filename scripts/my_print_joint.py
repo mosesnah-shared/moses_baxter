@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/python3
 
 # =========================================================== #
 # [Author] Moses C. Nah
@@ -14,31 +14,31 @@ import rospy
 import baxter_interface
 import baxter_external_devices          # For keyboard interrupt
 import numpy        as np
-import std_msgs.msg as msg 
+import std_msgs.msg as msg
 import threading
 
 from   std_msgs.msg       import UInt16, Empty
 from   baxter_interface   import CHECK_VERSION
 from   numpy.linalg       import inv, pinv
 from   baxter_pykdl       import baxter_kinematics
-from   tf.transformations import ( quaternion_from_euler , quaternion_matrix   , 
+from   tf.transformations import ( quaternion_from_euler , quaternion_matrix   ,
                                    quaternion_inverse    , quaternion_multiply )
 
 
-# [CONSTANTS] 
+# [CONSTANTS]
 RIGHT = 0
 LEFT  = 1
-BOTH  = 2 
+BOTH  = 2
 
 
 # [BACKUP]
 # import math
 # from tf.transformations import (euler_from_quaternion, quaternion_from_euler)
- 
+
 class BaxterControl( object ):
 
     def __init__( self, arm_type = LEFT ):
-        
+
         self.arm_type = arm_type
 
         # Controller Rates
@@ -97,10 +97,10 @@ class BaxterControl( object ):
             self.rs.disable()
 
 def main():
-    
+
     print("Initializing Controller Node... ")
     rospy.init_node("MY_BAXTER_CONTROL")
-    
+
     ctrl = BaxterControl( arm_type = RIGHT )
     rospy.on_shutdown( ctrl.clean_shutdown )
 
