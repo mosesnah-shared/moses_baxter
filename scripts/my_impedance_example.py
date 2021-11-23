@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/python3
 
 # Source code from following:
 # [REF] https://github.com/tony1994513/Impedance-control/blob/master/impedcontol.py
@@ -17,7 +17,7 @@ from   baxter_interface           import CHECK_VERSION
 from   baxter_pykdl               import baxter_kinematics
 
 # Ros related Libraries
-from std_msgs.msg                 import Empty 
+from std_msgs.msg                 import Empty
 from sensor_msgs.msg              import JointState
 
 # Local Library, under moses/scripts
@@ -40,23 +40,23 @@ def callback( data, start_time ):
     if 'torso_t0' in data.name:
 
 
-        time = ( rospy.Time.now() - start_time).to_sec()    
+        time = ( rospy.Time.now() - start_time).to_sec()
         for name in C.LEFT_JOINT_NAMES:
             # Find index of the name
             try:
                 idx = data.name.index( name )
-                rospy.loginfo( "[time] [%.4f] [name] [%s] [value] [%.5f]", time, name, data.position[ idx ]  ) 
+                rospy.loginfo( "[time] [%.4f] [name] [%s] [value] [%.5f]", time, name, data.position[ idx ]  )
                 # if file is not None:
                     # file.write( "time = {}, name = {},  value = {}".format( time, name, data.position[ idx ] ) )
             except:
                 NotImplementedError( )
 
-        time = ( rospy.Time.now() - start_time).to_sec()    
+        time = ( rospy.Time.now() - start_time).to_sec()
         for name in C.RIGHT_JOINT_NAMES:
             # Find index of the name
             try:
                 idx = data.name.index( name )
-                rospy.loginfo( "[time] [%.4f] [name] [%s] [value] [%.5f]", time, name, data.position[ idx ]  ) 
+                rospy.loginfo( "[time] [%.4f] [name] [%s] [value] [%.5f]", time, name, data.position[ idx ]  )
                 # if file is not None:
                 #     file.write( "time = {%.4f}, name = {%s},  value = {%.5f}".format( time, name, data.position[ idx ] ) )
             except:
@@ -65,13 +65,13 @@ def callback( data, start_time ):
 
 class JointImpedanceControl( object ):
     def __init__( self, record_data = False ):#, reconfig_server):
-        
 
-        self.record_data = record_data           # Boolean, data saved 
+
+        self.record_data = record_data           # Boolean, data saved
                                                  # Just define the whole arms in the first place to simplify the code
-        self.arms        = range( 2 )            # Since we have both the left/right arms
-        self.kins        = range( 2 )            # Since we have both the left/right arms
-        self.grips       = range( 2 )            # Since we have both the left/right arms
+        self.arms        = list( range( 2 ) )    # Since we have both the left/right arms
+        self.kins        = list( range( 2 ) )    # Since we have both the left/right arms
+        self.grips       = list( range( 2 ) )    # Since we have both the left/right arms
 
         self.start_time  = rospy.Time.now()
         self.T_MAX       = 30                    # The maximum run time for the robot, current
@@ -96,7 +96,7 @@ class JointImpedanceControl( object ):
         self.rate        = 1000.0  # Hz
         self.missed_cmds = 20.0    # Missed cycles before triggering timeout
 
-        # Impedance Parameters for Case 1 
+        # Impedance Parameters for Case 1
         # self.Kq = C.JOINT_IMP1_Kq
         # self.Bq = C.JOINT_IMP1_Bq
 
@@ -104,20 +104,20 @@ class JointImpedanceControl( object ):
         self.Bq = C.JOINT_IMP2_Bq
 
         self.robot_init( )
-        sys.stdout = Logger( record_data = record_data ) 
+        sys.stdout = Logger( record_data = record_data )
 
     def robot_init( self ):
         print("Getting robot state... ")
-        
+
         self.rs         = baxter_interface.RobotEnable( CHECK_VERSION )
         self.init_state = self.rs.state().enabled
-        
+
         print("Enabling robot... ")
         self.rs.enable()
-        
+
         print("Running. Ctrl-c to quit")
 
-    # [BACKUP] For initializing the cuff 
+    # [BACKUP] For initializing the cuff
     # def check_calibration( self, value ):
     #     # if self._gripper.calibrated():
     #     return True
@@ -125,18 +125,18 @@ class JointImpedanceControl( object ):
     #     #     return False
 
     def get_reference_traj( self, which_arm, pose1, pose2, D, t  ):
-        """ 
+        """
             Get the reference trajectory, the basis function is the minimum jerk trajectory
         """
-        assert which_arm in [ C.RIGHT, C.LEFT ] 
+        assert which_arm in [ C.RIGHT, C.LEFT ]
 
         q0  = dict( )                                   # Making  q0 as a dictionary
-        dq0 = dict( )                                   # Making dq0 as a dictionary 
+        dq0 = dict( )                                   # Making dq0 as a dictionary
 
-        pose1 = self.pose_gen( which_arm, pose1 )       # Regenerating the pose 
-        pose2 = self.pose_gen( which_arm, pose2 )       # Regenerating the pose 
+        pose1 = self.pose_gen( which_arm, pose1 )       # Regenerating the pose
+        pose2 = self.pose_gen( which_arm, pose2 )       # Regenerating the pose
 
-        limb  = C.LIMB_NAMES[ which_arm ] 
+        limb  = C.LIMB_NAMES[ which_arm ]
 
         # Iterate through the joints
         for joint in C.JOINT_NAMES:
@@ -148,13 +148,13 @@ class JointImpedanceControl( object ):
 
             q0[  joint_name ] = pose1[ joint_name ] + ( pose2[ joint_name ] - pose1[ joint_name ] ) * (  10 * tt ** 3 - 15 * tt ** 4 +  6 * tt ** 5 )
             dq0[ joint_name ] =               1.0/D * ( pose2[ joint_name ] - pose1[ joint_name ] ) * (  30 * tt ** 2 - 60 * tt ** 3 + 30 * tt ** 4 )
-     
-        return q0, dq0 
+
+        return q0, dq0
 
     def joint_impedance( self, which_arm, poses, Ds = None, toffs = None):
-            
+
         control_rate = rospy.Rate( self.rate )             # set control rate
-        assert which_arm in [ C.RIGHT, C.LEFT, C.BOTH ]    # If which_arm is C.BOTH, then we are moving both the left and right arm 
+        assert which_arm in [ C.RIGHT, C.LEFT, C.BOTH ]    # If which_arm is C.BOTH, then we are moving both the left and right arm
 
         # Making it as a list
         Ds    = [ Ds    ] if isinstance(    Ds , float ) or isinstance(    Ds , int ) else    Ds
@@ -176,8 +176,8 @@ class JointImpedanceControl( object ):
             ts = rospy.Time.now()
             t  = 0                      # Elapsed time
 
-            while not rospy.is_shutdown() and t <= Ds[ i ] + toffs[ i ]: 
-            
+            while not rospy.is_shutdown() and t <= Ds[ i ] + toffs[ i ]:
+
                 if not self.rs.state().enabled:
                     rospy.logerr("impedance example failed to meet, specified control rate timeout.")
                     break
@@ -206,33 +206,33 @@ class JointImpedanceControl( object ):
 
                     tau_L[ left_name ]   =  self.Kq[ joint ] * (  q0_L[  left_name ] -  q_L[  left_name ] )   # The Stiffness portion
                     tau_L[ left_name ]  +=  self.Bq[ joint ] * ( dq0_L[  left_name ] - dq_L[  left_name ] )   # The Damping   portion
-                    
-                    if self.record_data:
-                        rospy.loginfo( "[time] [%.4f] [name] [%s] [value] [%.5f]", t, right_name + "_q0"  ,  q0_R[ right_name ]  ) 
-                        rospy.loginfo( "[time] [%.4f] [name] [%s] [value] [%.5f]", t, right_name + "_q"   ,   q_R[ right_name ]  ) 
-                        rospy.loginfo( "[time] [%.4f] [name] [%s] [value] [%.5f]", t, right_name + "_dq0" , dq0_R[ right_name ]  ) 
-                        rospy.loginfo( "[time] [%.4f] [name] [%s] [value] [%.5f]", t, right_name + "_dq"  ,  dq_R[ right_name ]  ) 
-                        rospy.loginfo( "[time] [%.4f] [name] [%s] [value] [%.5f]", t, right_name + "_tau" , tau_R[ right_name ]  ) 
 
-                        rospy.loginfo( "[time] [%.4f] [name] [%s] [value] [%.5f]", t, left_name + "_q0"  ,  q0_L[ left_name  ]  ) 
-                        rospy.loginfo( "[time] [%.4f] [name] [%s] [value] [%.5f]", t, left_name + "_q"   ,   q_L[ left_name  ]  ) 
-                        rospy.loginfo( "[time] [%.4f] [name] [%s] [value] [%.5f]", t, left_name + "_dq0" , dq0_L[ left_name ]  ) 
-                        rospy.loginfo( "[time] [%.4f] [name] [%s] [value] [%.5f]", t, left_name + "_dq"  ,  dq_L[ left_name ]  ) 
-                        rospy.loginfo( "[time] [%.4f] [name] [%s] [value] [%.5f]", t, left_name + "_tau" , tau_L[ left_name ]  ) 
+                    if self.record_data:
+                        rospy.loginfo( "[time] [%.4f] [name] [%s] [value] [%.5f]", t, right_name + "_q0"  ,  q0_R[ right_name ]  )
+                        rospy.loginfo( "[time] [%.4f] [name] [%s] [value] [%.5f]", t, right_name + "_q"   ,   q_R[ right_name ]  )
+                        rospy.loginfo( "[time] [%.4f] [name] [%s] [value] [%.5f]", t, right_name + "_dq0" , dq0_R[ right_name ]  )
+                        rospy.loginfo( "[time] [%.4f] [name] [%s] [value] [%.5f]", t, right_name + "_dq"  ,  dq_R[ right_name ]  )
+                        rospy.loginfo( "[time] [%.4f] [name] [%s] [value] [%.5f]", t, right_name + "_tau" , tau_R[ right_name ]  )
+
+                        rospy.loginfo( "[time] [%.4f] [name] [%s] [value] [%.5f]", t, left_name + "_q0"  ,  q0_L[ left_name  ]  )
+                        rospy.loginfo( "[time] [%.4f] [name] [%s] [value] [%.5f]", t, left_name + "_q"   ,   q_L[ left_name  ]  )
+                        rospy.loginfo( "[time] [%.4f] [name] [%s] [value] [%.5f]", t, left_name + "_dq0" , dq0_L[ left_name ]  )
+                        rospy.loginfo( "[time] [%.4f] [name] [%s] [value] [%.5f]", t, left_name + "_dq"  ,  dq_L[ left_name ]  )
+                        rospy.loginfo( "[time] [%.4f] [name] [%s] [value] [%.5f]", t, left_name + "_tau" , tau_L[ left_name ]  )
 
                     if   which_arm == C.RIGHT:
 
                         self.arms[ C.RIGHT ].set_joint_torques( tau_R )
-                    
+
                     elif which_arm == C.LEFT:
 
                         self.arms[ C.LEFT  ].set_joint_torques( tau_L )
-                    
+
                     elif which_arm == C.BOTH:
 
                         self.arms[ C.RIGHT ].set_joint_torques( tau_R )
                         self.arms[ C.LEFT  ].set_joint_torques( tau_L )
-                        
+
                     else:
                         NotImplementedError( )
 
@@ -242,7 +242,7 @@ class JointImpedanceControl( object ):
 
     def pose_gen( self, which_arm, old_pose ):
 
-        assert which_arm in [ C.RIGHT, C.LEFT ] 
+        assert which_arm in [ C.RIGHT, C.LEFT ]
 
         new_pose = dict( )
 
@@ -256,7 +256,7 @@ class JointImpedanceControl( object ):
                     new_pose[ "left_" + name ] = -old_pose[ name ]
                 else:
                     new_pose[ "left_" + name ] =  old_pose[ name ]
-            
+
         else:
             NotImplementedError( )
 
@@ -274,12 +274,12 @@ class JointImpedanceControl( object ):
             pose = self.pose_gen( which_arm, pose )
 
             self.arms[ which_arm ].set_joint_position_speed( joint_speed )
-            self.arms[ which_arm ].move_to_joint_positions( pose )  
+            self.arms[ which_arm ].move_to_joint_positions( pose )
 
-            rospy.sleep( wait_time )   
+            rospy.sleep( wait_time )
 
     def joint_state_listener( self ):
-        
+
         # rospy.init_node( 'my_listener', anonymous = False )
         rospy.Subscriber( "robot/joint_states", JointState, callback, self.start_time )
 
@@ -292,7 +292,7 @@ class JointImpedanceControl( object ):
 
             rospy.sleep( 5 )
 
-            self.grips[ C.RIGHT ].close(  block = False )   
+            self.grips[ C.RIGHT ].close(  block = False )
             self.grips[ C.LEFT  ].close(  block = False )
 
             rospy.sleep( 5 )
@@ -315,7 +315,7 @@ class JointImpedanceControl( object ):
                         rospy.signal_shutdown("Reading Joint Data finished.")
 
                     if c == "l":
-                        if left_open == True: 
+                        if left_open == True:
                             self.grips[ C.LEFT  ].open(   block = False )
 
                         else:
@@ -336,8 +336,8 @@ class JointImpedanceControl( object ):
 
                     if c== "d":
                         DONE = True
-                        rospy.loginfo( "Gripper Done"  ) 
-             
+                        rospy.loginfo( "Gripper Done"  )
+
 
 
     def clean_shutdown(self):
@@ -349,7 +349,7 @@ class JointImpedanceControl( object ):
 
         for i in range( 2 ):
             self.arms[ i ].exit_control_mode()
-        
+
         if not self.init_state and self.rs.state().enabled:
             # print( "Disabling robot..." )
             self.rs.disable()
@@ -359,16 +359,16 @@ def main():
 
     arg_fmt = argparse.RawDescriptionHelpFormatter
     parser  = argparse.ArgumentParser( formatter_class = arg_fmt )
-    parser.add_argument('-s', '--save_data',    
+    parser.add_argument('-s', '--save_data',
                         dest = 'record_data',   action = 'store_true',
                         help = 'Save the Data')
 
-    parser.add_argument('-g', '--gripper_on',    
+    parser.add_argument('-g', '--gripper_on',
                         dest = 'gripper_on',    action = 'store_true',
                         help = 'Turn on Gripper')
 
 
-    args = parser.parse_args( rospy.myargv( )[ 1: ] ) 
+    args = parser.parse_args( rospy.myargv( )[ 1: ] )
 
     print("Initializing node... ")
     rospy.init_node("impedance_control_right" )
@@ -380,7 +380,7 @@ def main():
 
     if args.gripper_on:
 
-        #  Can put arrays of pose                                    
+        #  Can put arrays of pose
         my_baxter.move2pose( C.RIGHT, [ C.REST_POSE, C.GRASP_POSE_WIDER, C.WIDE_POSE, C.REST_POSE], wait_time = 1, joint_speed = 0.3 )
         # my_baxter.move2pose( C.LEFT , [ C.REST_POSE, C.GRASP_POSE_WIDER, C.WIDE_POSE, C.REST_POSE], wait_time = 1, joint_speed = 0.3 )
 
