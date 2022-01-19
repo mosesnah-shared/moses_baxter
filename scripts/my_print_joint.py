@@ -19,16 +19,11 @@ import threading
 
 from   std_msgs.msg       import UInt16, Empty
 from   baxter_interface   import CHECK_VERSION
-from   numpy.linalg       import inv, pinv
 from   baxter_pykdl       import baxter_kinematics
-from   tf.transformations import ( quaternion_from_euler , quaternion_matrix   ,
-                                   quaternion_inverse    , quaternion_multiply )
 
 
-# [CONSTANTS]
-RIGHT = 0
-LEFT  = 1
-BOTH  = 2
+# Local Library, under moses/scripts
+from my_constants import Constants as C
 
 
 # [BACKUP]
@@ -37,7 +32,7 @@ BOTH  = 2
 
 class BaxterControl( object ):
 
-    def __init__( self, arm_type = LEFT ):
+    def __init__( self, arm_type = C.RIGHT ):
 
         self.arm_type = arm_type
 
@@ -46,12 +41,12 @@ class BaxterControl( object ):
         self.controller_rate    = 520.0 # Hz
 
         # Robot Control Objects
-        if   self.arm_type == RIGHT:
+        if   self.arm_type == C.RIGHT:
             self.arm  = baxter_interface.limb.Limb( "right" )
             self.kin  = baxter_kinematics(          "right" )
             self.grip = baxter_interface.Gripper(   "right" )
 
-        elif self.arm_type == LEFT:
+        elif self.arm_type == C.LEFT:
             self.arm  = baxter_interface.limb.Limb( "left" )
             self.kin  = baxter_kinematics(          "left" )
             self.grip = baxter_interface.Gripper(   "left" )
@@ -68,8 +63,6 @@ class BaxterControl( object ):
         self.rs.enable()
 
 
-
-
     def print_joints( self ):
 
         DONE = False
@@ -84,8 +77,16 @@ class BaxterControl( object ):
                     rospy.signal_shutdown("Reading Joint Data finished.")
 
                 if c == "p":
-                    print(" Printing Joint Data")
-                    print( self.arm.joint_angles() )
+                    # The most convenient form for the print is simply printing out the right angle joints without "right" prefix,
+                    # in the following order:
+                    # Joint angle
+                    print( "=" * 100 )
+                    for name in C.JOINT_NAMES:
+                        val = self.arm.joint_angles( ).get( "right_" + name )
+                        print( "'{0}' : {1:.10f},".format( name, val ) )
+
+                    print( "=" * 100 )
+
 
 
     def clean_shutdown(self):
@@ -101,7 +102,7 @@ def main():
     print("Initializing Controller Node... ")
     rospy.init_node("MY_BAXTER_CONTROL")
 
-    ctrl = BaxterControl( arm_type = RIGHT )
+    ctrl = BaxterControl( arm_type = C.RIGHT )
     rospy.on_shutdown( ctrl.clean_shutdown )
 
     ctrl.print_joints( )

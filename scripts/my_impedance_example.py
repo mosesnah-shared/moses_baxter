@@ -118,6 +118,10 @@ class JointImpedanceControl( object ):
         # [Moses C. Nah] You need to separately save the output to use the grippers
         self.grip_ctrls = [ GripperConnect( arm ) for arm in C.LIMB_NAMES ]
 
+        # Open the grippers
+        self.grips[ C.RIGHT ].open(  block = False )
+        self.grips[ C.LEFT  ].open(  block = False )
+
         self.rs.enable()
 
         print("Running. Ctrl-c to quit")
@@ -396,31 +400,23 @@ def main():
 
 
     else:
+        # rospy.sleep( 1
+        # my_baxter.move2pose( C.LEFT , C.GRASP_POSE, wait_time = 2, joint_speed = 0.1 )
+        my_baxter.move2pose( C.RIGHT, C.GRASP_POSE, wait_time = 2, joint_speed = 0.2 )
+        my_baxter.move2pose( C.LEFT , C.GRASP_POSE, wait_time = 2, joint_speed = 0.2 )
 
-        # rospy.sleep( 1 )
-        # my_baxter.joint_impedance( C.RIGHT, [ C.REST_POSE, C.GRASP_POSE_WIDER, C.REST_POSE  ] , Ds = [2,2], toffs = [5,5]  )
-        # my_baxter.move2pose( C.LEFT , C.REST_POSE, wait_time = 1, joint_speed = 0.3 )
-        # my_baxter.move2pose( C.LEFT,  C.MID_POSE, wait_time = 1, joint_speed = 0.3 )
-        # my_baxter.move2pose( C.LEFT , C.REST_POSE, wait_time = 1, joint_speed = 0.3 )
+        my_baxter.move2pose( C.RIGHT, C.MID_POSE  , wait_time = 2, joint_speed = 0.2 )
+        my_baxter.move2pose( C.LEFT , C.MID_POSE  , wait_time = 2, joint_speed = 0.2 )
 
-        # my_baxter.move2pose( C.LEFT , C.GRASP_POSE, wait_time = 1, joint_speed = 0.3 )
-        # my_baxter.move2pose( C.RIGHT, C.GRASP_POSE, wait_time = 1, joint_speed = 0.3 )
-
-        my_baxter.move2pose( C.LEFT , C.REST_POSE, wait_time = 1, joint_speed = 0.3 )
-        my_baxter.move2pose( C.RIGHT, C.REST_POSE, wait_time = 1, joint_speed = 0.3 )
-
-        my_baxter.control_gripper( mode = "timer" )
-
-        exit( )
-        # my_baxter.move2pose( C.RIGHT, C.GRASP_POSE_2, wait_time = 1, joint_speed = 0.3 )
-        # my_baxter.move2pose( C.LEFT , C.GRASP_POSE_2, wait_time = 1, joint_speed = 0.3 )
+        my_baxter.move2pose( C.RIGHT, C.FINAL_POSE, wait_time = 2, joint_speed = 0.2 )
+        my_baxter.move2pose( C.LEFT , C.FINAL_POSE, wait_time = 2, joint_speed = 0.2 )
 
 
-        # my_baxter.joint_impedance(   C.LEFT, [ C.REST_POSE, C.MID_POSE, C.REST_POSE  ] , Ds = [2.0,2.0], toffs = [0.4,3]  )
-        # my_baxter.joint_impedance(  C.BOTH, [ C.REST_POSE, C.MID_POSE, C.REST_POSE  ] , Ds = [1.0,1.0], toffs = [0.0,3]  )
+        # my_baxter.move2pose( C.RIGHT, C.MID_POSE, wait_time = 2, joint_speed = 0.3 )
 
-        # my_baxter.joint_impedance(  C.MID_POSE_RIGHT   ,  C.REST_POSE_RIGHT , D, D + 4 )
+        # my_baxter.control_gripper( mode = "timer" )
 
+        
 
 
 if __name__ == "__main__":

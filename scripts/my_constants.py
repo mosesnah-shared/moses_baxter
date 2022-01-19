@@ -30,63 +30,39 @@ class Constants:
     JOINT_TO_FLIP     = [       "s0",                   "e0",                   "w0",                   "w2" ]
 
     # All the values are in "right" standard, "left" should add minus signs
-    GRASP_POSE = {
-                's0':  0.63621853177547540,
-                's1': -0.30219421521342650,
-                'e0':  0.45099035163831164,
-                'e1':  1.78095169473496530,
-                'w0': -0.03604854851530722,
-                'w1': -1.44922834935474460,
-                'w2': -2.00567988016017830
-    }
+    # [Moses C. Nah] Assuming that the movement is 2D planar, the following joint values give you the sign info
+    #               joint s1: (shoulder flex/extension) for the right arm, the value is negative as you ``lift'' up
+    #                                                   0   rad is when the upper limb is parallel to ground
+    #                                                   -.8 rad is the lower limit, i.e., maximum lift up
+    #               joint e1: (elbow    flex/extension) for the right arm, the value goes from 1.5 ~ 0, where 0 is the lower limit
+    #                                                   1.5 rad (pi/2) when  it sees down, 0 rad for full extension
+    #               joint w1: (wrist    flex/extension) for the right arm, the value goes from 1.5 - -1.5 very wide compared to others
+    #                                                   1.5 rad for seeing down, -1.5 for seeing up
+    #               Note that these joint correspond to "not flip joints"
 
-    GRASP_POSE_2 ={
-                's0':  0.84905836609457650,
-                's1':  0.36815538909249930,
-                'e0': -0.00345145677274218,
-                'e1':  1.24520890456598470,
-                'w0':  0.03796602450016399,
-                'w1':  0.49355831850213190,
-                'w2': -1.84767985900798080 }
+    GRASP_POSE = {  's0' : 0.7869321442,
+                    's1' : 0.4045874328,
+                    'e0' : -0.0149563127,
+                    'e1' : 1.4116458201,
+                    'w0' : -0.0464029188,
+                    'w1' :  0.3879126465,
+                    'w2' : -1.5823011827 }
 
+    MID_POSE = {    's0' : 0.7869321442,
+                    's1' : -0.3419854693,
+                    'e0' : -0.0149563127,
+                    'e1' : 0.3097428536,
+                    'w0' : -0.0464029188,
+                    'w1' : -0.759660457,
+                    'w2' : -1.5823011827     }
 
-    GRASP_POSE_WIDER = {
-                's0':  0.6089903727905093,
-                's1': -0.3451456772742181,
-                'e0':  0.3079466431679968,
-                'e1':  1.5964905049917444,
-                'w0': -0.3305728597893067,
-                'w1': -1.0783884938834458,
-                'w2': -1.8177672336442152 }
-
-
-    MID_POSE =  {
-                's0':  0.70217970565454810,
-                's1': -0.45137384683528300,
-                'e0':  0.19711653124327566,
-                'e1':  0.34898062924393164,
-                'w0': -0.17755827619773665,
-                'w1':  0.16451943950071063,
-                'w2': -1.7732817907955383 }
-
-    WIDE_POSE = {
-                's0': -0.14112623248545805,
-                's1': -0.22127672865247094,
-                'e0':  0.20248546400087460,
-                'e1':  1.34453416058156500,
-                'w0': -0.09088836168221076,
-                'w1': -1.33149532388453900,
-                'w2': -1.73915071826508780 }
-
-    REST_POSE = {
-                's0':  0.6634466907604415,
-                's1':  0.5150340495325276,
-                'e0':  0.42951462060791584,
-                'e1':  0.17755827619773665,
-                'w0': -0.16988837225830958,
-                'w1':  0.9894176081860918,
-                'w2': -2.0075973561450353 }
-
+    FINAL_POSE = {    's0' : 0.7869321442,
+                    's1' :  0.0000000000,
+                    'e0' : -0.0149563127,
+                    'e1' : 0.7097428536,
+                    'w0' : -0.0464029188,
+                    'w1' :  0.389660457,
+                    'w2' : -1.5823011827     }
 
     # IMPEDANCE PARAMETERS
     # Case 1
