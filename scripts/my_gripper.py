@@ -1,4 +1,4 @@
-#!/usr/bin/python2
+#!/usr/bin/python3
 
 # Copyright (c) 2013-2015, Rethink Robotics
 # All rights reserved.
@@ -40,7 +40,7 @@ from baxter_interface import (
 )
 
 
-class GripperConnect(object):
+class GripperConnect( object ):
     """
     Connects wrist button presses to gripper open/close commands.
 
@@ -150,6 +150,7 @@ def main():
                     log_level=args.verbosity)
 
     arms = (args.gripper,) if args.gripper != 'both' else ('left', 'right')
+
     grip_ctrls = [GripperConnect(arm, args.lights) for arm in arms]
 
     print("Press cuff buttons to control grippers. Spinning...")

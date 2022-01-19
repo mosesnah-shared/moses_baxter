@@ -1,4 +1,5 @@
-#!/usr/bin/env python
+#!/usr/bin/python3
+
 
 # =========================================================== #
 # [Author] Moses C. Nah
@@ -13,7 +14,7 @@ import rospy
 import time
 import baxter_interface
 import numpy        as np
-import std_msgs.msg as msg 
+import std_msgs.msg as msg
 import threading
 import sys
 import argparse
@@ -24,7 +25,7 @@ from   sensor_msgs.msg    import JointState
 from   baxter_interface   import CHECK_VERSION
 from   numpy.linalg       import inv, pinv
 from   baxter_pykdl       import baxter_kinematics
-from   tf.transformations import ( quaternion_from_euler , quaternion_matrix   , 
+from   tf.transformations import ( quaternion_from_euler , quaternion_matrix   ,
                                    quaternion_inverse    , quaternion_multiply )
 
 
@@ -42,23 +43,23 @@ class Logger(object):
         self.record_data = record_data
         self.terminal    = sys.stdout
 
-        if record_data == True:  
+        if record_data == True:
             time_now         = time.strftime( '%Y_%m_%d-%H_%M' )                 # Redirecting the stdout to file
             self.log = open( C.SAVE_DIR + 'baxter_'  + time_now + '.txt' , 'w')
         else:
             self.log = None
-   
+
     def write(self, message ):
         self.terminal.write( message )
 
         if self.log is not None:
-            self.log.write( message )  
+            self.log.write( message )
 
     def flush(self):
         # this flush method is needed for python 3 compatibility.
         # this handles the flush command by doing nothing.
         # you might want to specify some extra behavior here.
-        pass    
+        pass
 
 
 
@@ -77,23 +78,23 @@ def callback( data, start_time ):
     if 'torso_t0' in data.name:
 
 
-        time = ( rospy.Time.now() - start_time).to_sec()    
+        time = ( rospy.Time.now() - start_time).to_sec()
         for name in C.LEFT_JOINT_NAMES:
             # Find index of the name
             try:
                 idx = data.name.index( name )
-                rospy.loginfo( "[time] [%.4f] [name] [%s] [value] [%.5f]", time, name, data.position[ idx ]  ) 
+                rospy.loginfo( "[time] [%.4f] [name] [%s] [value] [%.5f]", time, name, data.position[ idx ]  )
                 # if file is not None:
                     # file.write( "time = {}, name = {},  value = {}".format( time, name, data.position[ idx ] ) )
             except:
                 NotImplementedError( )
 
-        time = ( rospy.Time.now() - start_time).to_sec()    
+        time = ( rospy.Time.now() - start_time).to_sec()
         for name in C.RIGHT_JOINT_NAMES:
             # Find index of the name
             try:
                 idx = data.name.index( name )
-                rospy.loginfo( "[time] [%.4f] [name] [%s] [value] [%.5f]", time, name, data.position[ idx ]  ) 
+                rospy.loginfo( "[time] [%.4f] [name] [%s] [value] [%.5f]", time, name, data.position[ idx ]  )
                 # if file is not None:
                 #     file.write( "time = {%.4f}, name = {%s},  value = {%.5f}".format( time, name, data.position[ idx ] ) )
             except:
@@ -104,7 +105,7 @@ class BaxterControl( object ):
 
     def __init__( self, record_data = True ):   # Using arm_type could be C.LEFT/C.RIGHT/C.BOTH
 
-        self.record_data = record_data           # Boolean, data saved 
+        self.record_data = record_data           # Boolean, data saved
                                                  # Just define the whole arms in the first place to simplify the code
         self.arms        = range( 2 )            # Since we have both the left/right arms
         self.kins        = range( 2 )            # Since we have both the left/right arms
@@ -123,7 +124,7 @@ class BaxterControl( object ):
 
 
         # Setting the rate of the robot
-        self.joint_publish_rate = 1000.0 # Hz      
+        self.joint_publish_rate = 1000.0 # Hz
         self.controller_rate    =  500.0 # Hz
         self.missed_cmds        =   20.0 # Missed cycles before triggering timeout
 
@@ -131,7 +132,7 @@ class BaxterControl( object ):
         # set joint state publishing to 1000Hz
         # [REF] http://wiki.ros.org/rospy/Overview/Publishers%20and%20Subscribers
         self.joint_state_pub = rospy.Publisher('robot/joint_state_publish_rate', UInt16, queue_size = 10 )
-        # self.joint_state_pub.publish( "hello" )   
+        # self.joint_state_pub.publish( "hello" )
         self.joint_state_pub.publish( self.joint_publish_rate )
 
 
@@ -140,7 +141,7 @@ class BaxterControl( object ):
 
         # print( data.position )
         # rospy.loginfo(rospy.get_caller_id() + "I heard %s", data.data)
-        sys.stdout = Logger( record_data = record_data ) 
+        sys.stdout = Logger( record_data = record_data )
 
     def robot_init( self ):
 
@@ -154,7 +155,7 @@ class BaxterControl( object ):
 
 
     def joint_state_listener( self ):
-        
+
         # rospy.init_node( 'my_listener', anonymous = False )
         rospy.Subscriber( "robot/joint_states", JointState, callback, self.start_time )
 
@@ -172,37 +173,37 @@ class BaxterControl( object ):
 
         self.arms[ C.RIGHT ].set_command_timeout( (1.0 / self.joint_publish_rate) * self.missed_cmds )
 
-        # Get the initial time 
-        ts = rospy.Time.now().to_sec( )  
+        # Get the initial time
+        ts = rospy.Time.now().to_sec( )
         t  = ts
 
         # print( t, ts, t-ts)
         while t - ts <= 4:
-            t        = rospy.Time.now().to_sec() 
+            t        = rospy.Time.now().to_sec()
             # print( t - ts)
-            q0 , dq0 = self.get_joint_ref_traj( pose1, pose2, D, t - ts ) 
+            q0 , dq0 = self.get_joint_ref_traj( pose1, pose2, D, t - ts )
             q  , dq  = self.get_joint_current(  )                            # Get current joint postures and velociries
-        
+
             tau      = np.multiply( np.squeeze( Kq ) , np.squeeze( q0 - q ) ) #- np.multiply( np.squeeze( Bq ), np.squeeze( dq ) )#+ np.multiply( np.squeeze( Bq ) , np.squeeze( dq0 - dq ) )   # Multiply is the hadamard product
 
 
             for i in range( 7 ):
-                rospy.loginfo( "[time] [%.4f] [name] [%s] [value] [%.5f]", t - ts, C.RIGHT_JOINT_NAMES[ i ] + "_q0" , q0[ i ]  ) 
-                rospy.loginfo( "[time] [%.4f] [name] [%s] [value] [%.5f]", t - ts, C.RIGHT_JOINT_NAMES[ i ] + "_q"  , q[ i ]   ) 
-                rospy.loginfo( "[time] [%.4f] [name] [%s] [value] [%.5f]", t - ts, C.RIGHT_JOINT_NAMES[ i ] + "_tau", tau[ i ] ) 
-                rospy.loginfo( "[time] [%.4f] [name] [%s] [value] [%.5f]", t - ts, C.RIGHT_JOINT_NAMES[ i ] + "_diff", q0[ i ] - q[ i ] ) 
+                rospy.loginfo( "[time] [%.4f] [name] [%s] [value] [%.5f]", t - ts, C.RIGHT_JOINT_NAMES[ i ] + "_q0" , q0[ i ]  )
+                rospy.loginfo( "[time] [%.4f] [name] [%s] [value] [%.5f]", t - ts, C.RIGHT_JOINT_NAMES[ i ] + "_q"  , q[ i ]   )
+                rospy.loginfo( "[time] [%.4f] [name] [%s] [value] [%.5f]", t - ts, C.RIGHT_JOINT_NAMES[ i ] + "_tau", tau[ i ] )
+                rospy.loginfo( "[time] [%.4f] [name] [%s] [value] [%.5f]", t - ts, C.RIGHT_JOINT_NAMES[ i ] + "_diff", q0[ i ] - q[ i ] )
 
 
             # print( t - ts )
             # print( t - ts, tau )
             # tau = np.clip( tau, -0.005, 0.005)
             # print( t-ts, q0 - q, tau )
-            
+
 
             tmp = dict( zip( C.RIGHT_JOINT_NAMES, tau ) )
-            
 
-            # print( tmp) 
+
+            # print( tmp)
             self.arms[ C.RIGHT ].set_joint_torques( tmp )
             rate.sleep( )
 
@@ -221,7 +222,7 @@ class BaxterControl( object ):
 
         # First of all, get the values of the pose1, pose2 dictionary
         pose_init  = np.array( [ pose1[ key ] for key in C.RIGHT_JOINT_NAMES ] )
-        pose_final = np.array( [ pose2[ key ] for key in C.RIGHT_JOINT_NAMES ] ) 
+        pose_final = np.array( [ pose2[ key ] for key in C.RIGHT_JOINT_NAMES ] )
 
         # Define the function that gets the time input, and
         # Trim the t so that if it is higher than D, then set it as D
@@ -241,7 +242,7 @@ class BaxterControl( object ):
 
 
         # If which_arm is neither 0 nor 1, assert
-        assert which_arm in [ C.RIGHT, C.LEFT] 
+        assert which_arm in [ C.RIGHT, C.LEFT]
 
         if   which_arm == C.RIGHT:
             # Need to check whether the names contain right on the pose
@@ -253,12 +254,12 @@ class BaxterControl( object ):
             assert all( "left" in s for s in pose.keys( ) )
 
         self.arms[ which_arm ].set_joint_position_speed( joint_speed )
-        self.arms[ which_arm ].move_to_joint_positions( pose )            
+        self.arms[ which_arm ].move_to_joint_positions( pose )
 
 
     def grip_command( self ):
         self.grip.close()
-   
+
         rospy.sleep(2)
         self.grip.open()
 
@@ -271,10 +272,10 @@ class BaxterControl( object ):
 
 
 def main():
-    
+
     arg_fmt = argparse.RawDescriptionHelpFormatter
     parser  = argparse.ArgumentParser( formatter_class = arg_fmt )
-    parser.add_argument('-s', '--save_data',    
+    parser.add_argument('-s', '--save_data',
                         dest = 'record_data',   action = 'store_true',
                         help = 'Save the Data')
 
@@ -282,7 +283,7 @@ def main():
 
 
     print("Initializing Controller Node... ")
-    
+
     rospy.init_node("MY_BAXTER_CONTROL")
     ctrl = BaxterControl( record_data = args.record_data )
     rospy.on_shutdown( ctrl.clean_shutdown )
@@ -303,4 +304,3 @@ def main():
 
 if __name__ == '__main__':
     main()
- 

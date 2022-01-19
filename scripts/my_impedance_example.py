@@ -22,7 +22,7 @@ from sensor_msgs.msg              import JointState
 
 # Local Library, under moses/scripts
 from my_constants import Constants as C
-from my_utils     import Logger
+from my_utils     import Logger, GripperConnect
 
 
 def callback( data, start_time ):
@@ -113,6 +113,11 @@ class JointImpedanceControl( object ):
         self.init_state = self.rs.state().enabled
 
         print("Enabling robot... ")
+
+        # Initializing the gripper
+        # [Moses C. Nah] You need to separately save the output to use the grippers
+        self.grip_ctrls = [ GripperConnect( arm ) for arm in C.LIMB_NAMES ]
+
         self.rs.enable()
 
         print("Running. Ctrl-c to quit")
@@ -376,8 +381,6 @@ def main():
 
     rospy.on_shutdown( my_baxter.clean_shutdown )
 
-    # my_baxter.joint_state_listener( )
-
     if args.gripper_on:
 
         #  Can put arrays of pose
@@ -406,13 +409,15 @@ def main():
         my_baxter.move2pose( C.LEFT , C.REST_POSE, wait_time = 1, joint_speed = 0.3 )
         my_baxter.move2pose( C.RIGHT, C.REST_POSE, wait_time = 1, joint_speed = 0.3 )
 
+        my_baxter.control_gripper( mode = "timer" )
+
+        exit( )
         # my_baxter.move2pose( C.RIGHT, C.GRASP_POSE_2, wait_time = 1, joint_speed = 0.3 )
         # my_baxter.move2pose( C.LEFT , C.GRASP_POSE_2, wait_time = 1, joint_speed = 0.3 )
 
-        my_baxter.control_gripper( mode = "timer" )
 
         # my_baxter.joint_impedance(   C.LEFT, [ C.REST_POSE, C.MID_POSE, C.REST_POSE  ] , Ds = [2.0,2.0], toffs = [0.4,3]  )
-        my_baxter.joint_impedance(  C.BOTH, [ C.REST_POSE, C.MID_POSE, C.REST_POSE  ] , Ds = [1.0,1.0], toffs = [0.0,3]  )
+        # my_baxter.joint_impedance(  C.BOTH, [ C.REST_POSE, C.MID_POSE, C.REST_POSE  ] , Ds = [1.0,1.0], toffs = [0.0,3]  )
 
         # my_baxter.joint_impedance(  C.MID_POSE_RIGHT   ,  C.REST_POSE_RIGHT , D, D + 4 )
 
