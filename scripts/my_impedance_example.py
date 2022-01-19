@@ -403,20 +403,20 @@ def main():
         # rospy.sleep( 1
         # my_baxter.move2pose( C.LEFT , C.GRASP_POSE, wait_time = 2, joint_speed = 0.1 )
         my_baxter.move2pose( C.RIGHT, C.GRASP_POSE, wait_time = 2, joint_speed = 0.2 )
-        my_baxter.move2pose( C.LEFT , C.GRASP_POSE, wait_time = 2, joint_speed = 0.2 )
+        # my_baxter.move2pose( C.LEFT , C.GRASP_POSE, wait_time = 2, joint_speed = 0.2 )
 
-        my_baxter.move2pose( C.RIGHT, C.MID_POSE  , wait_time = 2, joint_speed = 0.2 )
-        my_baxter.move2pose( C.LEFT , C.MID_POSE  , wait_time = 2, joint_speed = 0.2 )
+        # my_baxter.move2pose( C.RIGHT, C.MID_POSE  , wait_time = 2, joint_speed = 0.2 )
+        # my_baxter.move2pose( C.LEFT , C.MID_POSE  , wait_time = 2, joint_speed = 0.2 )
+        #
+        # my_baxter.move2pose( C.RIGHT, C.FINAL_POSE, wait_time = 2, joint_speed = 0.2 )
+        # my_baxter.move2pose( C.LEFT , C.FINAL_POSE, wait_time = 2, joint_speed = 0.2 )
 
-        my_baxter.move2pose( C.RIGHT, C.FINAL_POSE, wait_time = 2, joint_speed = 0.2 )
-        my_baxter.move2pose( C.LEFT , C.FINAL_POSE, wait_time = 2, joint_speed = 0.2 )
+        # my_baxter.joint_impedance(  C.BOTH, [ C.GRASP_POSE, C.MID_POSE  ] , Ds = [2.0], toffs = [0.0]  )
 
-
-        # my_baxter.move2pose( C.RIGHT, C.MID_POSE, wait_time = 2, joint_speed = 0.3 )
-
+        my_baxter.joint_impedance(  C.RIGHT, [ C.GRASP_POSE, C.MID_POSE  ] , Ds = [2.0], toffs = [3.0]  )
         # my_baxter.control_gripper( mode = "timer" )
 
-        
+
 
 
 if __name__ == "__main__":
