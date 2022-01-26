@@ -71,8 +71,7 @@ def callback(data):
 def joint_state_listener():
 
     rospy.init_node( 'my_listener', anonymous = False )
-    rospy.Subscriber( "robot/joint_states", JointState, callback)
-
+    rospy.Subscriber( "robot/joint_states", JointState, callback )
 
     # ctrl.joint_state_listener( )
     # rospy.sleep(2)
