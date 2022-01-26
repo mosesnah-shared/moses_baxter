@@ -12,15 +12,15 @@ from moses_baxter.msg import my_msg
 def talker():
     pub = rospy.Publisher( 'my_talk' , my_msg)
     rospy.init_node( 'my_talker', anonymous = True )
-    r = rospy.Rate( 10 ) #10hz
+    r = rospy.Rate( 20 )
 
     msg = my_msg()
-    msg.A = 1
-    msg.B = 4
-    msg.C = 7
+    msg.q0 = [0.1, 0.2, 0.3]
+    
 
     while not rospy.is_shutdown():
-        rospy.loginfo( msg )
+        # rospy.loginfo( msg )
+
         pub.publish( msg )
         r.sleep()
 

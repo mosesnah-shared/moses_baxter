@@ -10,7 +10,7 @@ import rospy
 from moses_baxter.msg import my_msg
 
 def callback( data ):
-    rospy.loginfo( "A:%d B:%d C:%d" % ( data.A, data.B, data.C ) )
+    rospy.loginfo( data.q0 )
 
 def listener():
     rospy.init_node(  'my_listener', anonymous = True)
@@ -20,4 +20,4 @@ def listener():
     rospy.spin()
 
 if __name__ == '__main__':
-    listener()
+    listener( )

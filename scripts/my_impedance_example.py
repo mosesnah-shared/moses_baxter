@@ -64,10 +64,10 @@ def callback( data, start_time ):
 
 
 class JointImpedanceControl( object ):
-    def __init__( self, record_data = False ):#, reconfig_server):
+    def __init__( self, publish_data = False ):#, reconfig_server):
 
 
-        self.record_data = record_data           # Boolean, data saved
+        self.publish_data = publish_data           # Boolean, data saved
                                                  # Just define the whole arms in the first place to simplify the code
         self.arms        = list( range( 2 ) )    # Since we have both the left/right arms
         self.kins        = list( range( 2 ) )    # Since we have both the left/right arms
@@ -75,6 +75,9 @@ class JointImpedanceControl( object ):
 
         self.start_time  = rospy.Time.now()
         self.T_MAX       = 30                    # The maximum run time for the robot, current
+
+
+        self.q0_msg      = list( range( 7 ) )    # The nominal posture
 
         # Saving the limb objects
         for idx, name in enumerate( [ "right", "left" ] ):
@@ -104,7 +107,8 @@ class JointImpedanceControl( object ):
         self.Bq = C.JOINT_IMP2_Bq
 
         self.robot_init( )
-        sys.stdout = Logger( record_data = record_data )
+        sys.stdout = Logger( publish_data = publish_data )
+
 
     def robot_init( self ):
         print("Getting robot state... ")
@@ -216,7 +220,7 @@ class JointImpedanceControl( object ):
                     tau_L[ left_name ]   =  self.Kq[ joint ] * (  q0_L[  left_name ] -  q_L[  left_name ] )   # The Stiffness portion
                     tau_L[ left_name ]  +=  self.Bq[ joint ] * ( dq0_L[  left_name ] - dq_L[  left_name ] )   # The Damping   portion
 
-                    if self.record_data:
+                    if self.publish_data:
                         rospy.loginfo( "[time] [%.4f] [name] [%s] [value] [%.5f]", t, right_name + "_q0"  ,  q0_R[ right_name ]  )
                         rospy.loginfo( "[time] [%.4f] [name] [%s] [value] [%.5f]", t, right_name + "_q"   ,   q_R[ right_name ]  )
                         rospy.loginfo( "[time] [%.4f] [name] [%s] [value] [%.5f]", t, right_name + "_dq0" , dq0_R[ right_name ]  )
@@ -286,12 +290,6 @@ class JointImpedanceControl( object ):
             self.arms[ which_arm ].move_to_joint_positions( pose )
 
             rospy.sleep( wait_time )
-
-    def joint_state_listener( self ):
-
-        # rospy.init_node( 'my_listener', anonymous = False )
-        rospy.Subscriber( "robot/joint_states", JointState, callback, self.start_time )
-
 
     def control_gripper( self , mode = "timer"):
         """
@@ -368,20 +366,19 @@ def main():
 
     arg_fmt = argparse.RawDescriptionHelpFormatter
     parser  = argparse.ArgumentParser( formatter_class = arg_fmt )
-    parser.add_argument('-s', '--save_data',
-                        dest = 'record_data',   action = 'store_true',
+    parser.add_argument('-s', '--publish_data',
+                        dest = 'publish_data',   action = 'store_true',
                         help = 'Save the Data')
 
     parser.add_argument('-g', '--gripper_on',
                         dest = 'gripper_on',    action = 'store_true',
                         help = 'Turn on Gripper')
 
-
     args = parser.parse_args( rospy.myargv( )[ 1: ] )
 
-    print("Initializing node... ")
-    rospy.init_node("impedance_control_right" )
-    my_baxter = JointImpedanceControl( args.record_data )
+    print( "Initializing node... " )
+    rospy.init_node( "impedance_control_right" )
+    my_baxter = JointImpedanceControl( args.publish_data )
 
     rospy.on_shutdown( my_baxter.clean_shutdown )
 
