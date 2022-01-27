@@ -38,9 +38,12 @@ function raw_data = my_txt_read( file_name )
     raw_data = struct();
     
     while( ~feof( fid ) )
-    
-        tline = fgetl( fid );                                              % Get the txt file
-        tmp   = regexp( tline , '(?<=\[).+?(?=\])', 'match' );             % Taking out the string inside the bracket (i.e., without the bracket)
+        
+        tline  = fgetl( fid );                                             % Get the txt file
+        names  = regexp( tline , '\[(.*?)\]', 'match' );                   % Taking out the string inside the bracket (i.e., without the bracket)
+        values = regexp( tline , '(?<=\[).+?(?=\])', 'match' );            % Taking out the string inside the bracket (i.e., without the bracket)
+
+        
                                                                            % [REF1] https://stackoverflow.com/questions/2973436/regex-lookahead-lookbehind-and-atomic-groups
                                                                            % [REF2] https://stackoverflow.com/questions/2403122/regular-expression-to-extract-text-between-square-brackets
                                                                            % (?<=\[) Look behind \[, e.g., (?<=B)A , Find expression A where expression B precedes

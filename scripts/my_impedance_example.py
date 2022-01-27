@@ -22,45 +22,10 @@ from sensor_msgs.msg              import JointState
 
 # Local Library, under moses/scripts
 from my_constants import Constants as C
-from my_utils     import Logger, GripperConnect
+from my_utils     import GripperConnect #Logger,
 
-
-def callback( data, start_time ):
-    # For the JointState data, we have the following data
-    # [1] position
-    # [2] velocity
-    # [3] effort
-    # [4] name
-    # [*] etc.
-    # [REF] https://stackoverflow.com/questions/57271100/how-to-feed-the-data-obtained-from-rospy-subscriber-data-into-a-variable
-    # We are interested at the joint position data, hence check whether the given data are joint data
-    # Can add more inputs if you want, by simply concatenating them
-    # [REF] https://answers.ros.org/question/332126/passing-multiple-arguments-to-subscriber-callback-function-in-python/
-    # We will check this via finding a specific string
-    if 'torso_t0' in data.name:
-
-
-        time = ( rospy.Time.now() - start_time).to_sec()
-        for name in C.LEFT_JOINT_NAMES:
-            # Find index of the name
-            try:
-                idx = data.name.index( name )
-                rospy.loginfo( "[time] [%.4f] [name] [%s] [value] [%.5f]", time, name, data.position[ idx ]  )
-                # if file is not None:
-                    # file.write( "time = {}, name = {},  value = {}".format( time, name, data.position[ idx ] ) )
-            except:
-                NotImplementedError( )
-
-        time = ( rospy.Time.now() - start_time).to_sec()
-        for name in C.RIGHT_JOINT_NAMES:
-            # Find index of the name
-            try:
-                idx = data.name.index( name )
-                rospy.loginfo( "[time] [%.4f] [name] [%s] [value] [%.5f]", time, name, data.position[ idx ]  )
-                # if file is not None:
-                #     file.write( "time = {%.4f}, name = {%s},  value = {%.5f}".format( time, name, data.position[ idx ] ) )
-            except:
-                NotImplementedError( )
+# Local Library, customized messages
+from moses_baxter.msg import my_msg
 
 
 class JointImpedanceControl( object ):
@@ -74,10 +39,12 @@ class JointImpedanceControl( object ):
         self.grips       = list( range( 2 ) )    # Since we have both the left/right arms
 
         self.start_time  = rospy.Time.now()
-        self.T_MAX       = 30                    # The maximum run time for the robot, current
 
 
-        self.q0_msg      = list( range( 7 ) )    # The nominal posture
+        self.pub = rospy.Publisher( 'my_baxter' , my_msg ) # The publisher of my message
+
+        self.msg    = my_msg()
+        self.msg.on = True
 
         # Saving the limb objects
         for idx, name in enumerate( [ "right", "left" ] ):
@@ -107,7 +74,6 @@ class JointImpedanceControl( object ):
         self.Bq = C.JOINT_IMP2_Bq
 
         self.robot_init( )
-        sys.stdout = Logger( publish_data = publish_data )
 
 
     def robot_init( self ):
@@ -209,7 +175,7 @@ class JointImpedanceControl( object ):
                 q_L   = self.arms[ C.LEFT  ].joint_angles()
                 dq_L  = self.arms[ C.LEFT  ].joint_velocities()
 
-                for joint in C.JOINT_NAMES:
+                for j, joint in enumerate( C.JOINT_NAMES ):
 
                     right_name = "right_" + joint             # [Example] "right_s0"
                     left_name  =  "left_" + joint             # [Example] "left_s0"
@@ -221,17 +187,16 @@ class JointImpedanceControl( object ):
                     tau_L[ left_name ]  +=  self.Bq[ joint ] * ( dq0_L[  left_name ] - dq_L[  left_name ] )   # The Damping   portion
 
                     if self.publish_data:
-                        rospy.loginfo( "[time] [%.4f] [name] [%s] [value] [%.5f]", t, right_name + "_q0"  ,  q0_R[ right_name ]  )
-                        rospy.loginfo( "[time] [%.4f] [name] [%s] [value] [%.5f]", t, right_name + "_q"   ,   q_R[ right_name ]  )
-                        rospy.loginfo( "[time] [%.4f] [name] [%s] [value] [%.5f]", t, right_name + "_dq0" , dq0_R[ right_name ]  )
-                        rospy.loginfo( "[time] [%.4f] [name] [%s] [value] [%.5f]", t, right_name + "_dq"  ,  dq_R[ right_name ]  )
-                        rospy.loginfo( "[time] [%.4f] [name] [%s] [value] [%.5f]", t, right_name + "_tau" , tau_R[ right_name ]  )
+                        self.msg.q0_L[ j ]  =  q0_L[  left_name ]
+                        self.msg.q_L[ j ]   =   q_L[  left_name ]
+                        self.msg.dq_L[ j ]  =  dq_L[  left_name ]
+                        self.msg.tau_L[ j ] = tau_L[  left_name ]
 
-                        rospy.loginfo( "[time] [%.4f] [name] [%s] [value] [%.5f]", t, left_name + "_q0"  ,  q0_L[ left_name  ]  )
-                        rospy.loginfo( "[time] [%.4f] [name] [%s] [value] [%.5f]", t, left_name + "_q"   ,   q_L[ left_name  ]  )
-                        rospy.loginfo( "[time] [%.4f] [name] [%s] [value] [%.5f]", t, left_name + "_dq0" , dq0_L[ left_name ]  )
-                        rospy.loginfo( "[time] [%.4f] [name] [%s] [value] [%.5f]", t, left_name + "_dq"  ,  dq_L[ left_name ]  )
-                        rospy.loginfo( "[time] [%.4f] [name] [%s] [value] [%.5f]", t, left_name + "_tau" , tau_L[ left_name ]  )
+                        self.msg.q0_R[ j ]  =  q0_R[ right_name ]
+                        self.msg.q_R[ j ]   =   q_R[ right_name ]
+                        self.msg.dq_R[ j ]  =  dq_R[ right_name ]
+                        self.msg.tau_R[ j ] = tau_R[ right_name ]
+
 
                     if   which_arm == C.RIGHT:
 
@@ -249,7 +214,9 @@ class JointImpedanceControl( object ):
                     else:
                         NotImplementedError( )
 
-
+                # Publish the message
+                self.msg.stamp = ( rospy.Time.now() - ts).to_sec( )
+                self.pub.publish( self.msg )
                 control_rate.sleep()
 
 
@@ -359,6 +326,9 @@ class JointImpedanceControl( object ):
 
         if not self.init_state and self.rs.state().enabled:
             # print( "Disabling robot..." )
+            self.msg.on = False
+            self.pub.publish( self.msg )
+
             self.rs.disable()
 
 
@@ -410,7 +380,7 @@ def main():
 
         # my_baxter.joint_impedance(  C.BOTH, [ C.GRASP_POSE, C.MID_POSE  ] , Ds = [2.0], toffs = [0.0]  )
 
-        my_baxter.joint_impedance(  C.RIGHT, [ C.GRASP_POSE, C.MID_POSE  ] , Ds = [2.0], toffs = [3.0]  )
+        my_baxter.joint_impedance(  C.RIGHT, [ C.GRASP_POSE, C.MID_POSE  ] , Ds = [1.0], toffs = [2.0]  )
         # my_baxter.control_gripper( mode = "timer" )
 
 

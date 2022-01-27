@@ -3,6 +3,15 @@
 
 #std_msgs/Header
 
-#time stamp
+float64 stamp
+bool on
 
-float64[] q0 # Right hand perspective/
+float64[7] q0_R    # Right hand perspective/
+float64[7] q_R
+float64[7] dq_R
+float64[7] tau_R
+
+float64[7] q0_L    # Left hand perspective/
+float64[7] q_L
+float64[7] dq_L
+float64[7] tau_L

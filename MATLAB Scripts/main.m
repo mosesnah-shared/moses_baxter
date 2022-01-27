@@ -10,9 +10,30 @@ clear all; close all; clc; workspace;
 
 %% (--) Read Data
 result_dir = "../results/";
-file_name  = result_dir + "side_displacement.txt";
+file_name  = "20220127_164210.txt";
+file_name  = result_dir + file_name;
 
-raw_data = my_txt_read( file_name );
+fid      = fopen( file_name );                                         % Opening the txt file with the name "txtName"
+raw_data = struct();
+
+
+
+while( ~feof( fid ) )
+
+    
+    % First string is time and second string is the name of the variable    
+    tline  = fgetl( fid );                                             % Get the txt file
+    names  = regexp( tline , '(?<=\[).+?(?=\])', 'match' );                   % Taking out the string inside the bracket (i.e., without the bracket)
+    
+    % Getting all the values
+    values = regexp( tline , '[+-]?([0-9]*[.])?[0-9]+', 'match' );            % Taking out the string inside the bracket (i.e., without the bracket)
+
+        
+end
+
+%%
+
+
 
 fn = fieldnames( raw_data );
 

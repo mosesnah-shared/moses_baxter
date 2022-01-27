@@ -12,7 +12,7 @@ class Constants:
 
 
     # The directory which saves all the simulation results
-    SAVE_DIR      = "/home/baxterplayground/ros_ws/src/newmanlab_code/moses-baxter/results/"
+    SAVE_DIR      = "/home/baxterplayground/ros_ws/src/newmanlab_code/moses_baxter/results/"
 
     # The constants used for the limb
     RIGHT = 0       # This is at the same time, an index for the list

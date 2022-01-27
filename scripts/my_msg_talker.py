@@ -15,8 +15,8 @@ def talker():
     r = rospy.Rate( 20 )
 
     msg = my_msg()
-    msg.q0 = [0.1, 0.2, 0.3]
-    
+    msg.q0_L[ 0 ] = 0.1
+    msg.q0_L[ 3 ] = 0.1
 
     while not rospy.is_shutdown():
         # rospy.loginfo( msg )
