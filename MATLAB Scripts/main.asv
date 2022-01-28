@@ -102,6 +102,6 @@ plot( raw_data.qo_R.time, raw_data.qo_R.value( 4, : ), 'parent', a )
 
 f = figure; a = axes( 'parent', f );
 hold on
-title( "wrist" ) 
+title( "wrist
 plot(  raw_data.q_R.time,  raw_data.q_R.value( 6, : ), 'parent', a )
 plot( raw_data.qo_R.time, raw_data.qo_R.value( 6, : ), 'parent', a )

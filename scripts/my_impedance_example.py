@@ -63,7 +63,7 @@ class JointImpedanceControl( object ):
 
 
                                    # control parameters
-        self.rate        = 1000.0  # Hz
+        self.rate        = 100.0   # Hz
         self.missed_cmds = 20.0    # Missed cycles before triggering timeout
 
         # Impedance Parameters for Case 1
@@ -150,6 +150,9 @@ class JointImpedanceControl( object ):
         N  = len( poses )
         assert N > 1                    # N should be bigger than 1, since we need at least initial - final posture of the impedance controller
 
+        tau_R = dict( )
+        tau_L = dict( )
+
         for i in range( N - 1 ):        # Iterating along the poses of the impedance controller
 
             ts = rospy.Time.now()
@@ -162,9 +165,6 @@ class JointImpedanceControl( object ):
                     break
 
                 t = ( rospy.Time.now( ) - ts ).to_sec( )        # The elapsed time of the simulatoin
-
-                tau_R = dict( )
-                tau_L = dict( )
 
                 q0_R, dq0_R = self.get_reference_traj( C.RIGHT, poses[ i ], poses[ i + 1 ], Ds[ i ], t )
                 q0_L, dq0_L = self.get_reference_traj( C.LEFT , poses[ i ], poses[ i + 1 ], Ds[ i ], t )
@@ -372,15 +372,11 @@ def main():
         my_baxter.move2pose( C.RIGHT, C.GRASP_POSE, wait_time = 2, joint_speed = 0.2 )
         # my_baxter.move2pose( C.LEFT , C.GRASP_POSE, wait_time = 2, joint_speed = 0.2 )
 
-        # my_baxter.move2pose( C.RIGHT, C.MID_POSE  , wait_time = 2, joint_speed = 0.2 )
-        # my_baxter.move2pose( C.LEFT , C.MID_POSE  , wait_time = 2, joint_speed = 0.2 )
-        #
-        # my_baxter.move2pose( C.RIGHT, C.FINAL_POSE, wait_time = 2, joint_speed = 0.2 )
-        # my_baxter.move2pose( C.LEFT , C.FINAL_POSE, wait_time = 2, joint_speed = 0.2 )
-
-        # my_baxter.joint_impedance(  C.BOTH, [ C.GRASP_POSE, C.MID_POSE  ] , Ds = [2.0], toffs = [0.0]  )
 
         my_baxter.joint_impedance(  C.RIGHT, [ C.GRASP_POSE, C.MID_POSE  ] , Ds = [1.0], toffs = [2.0]  )
+        # my_baxter.joint_impedance(  C.BOTH, [ C.GRASP_POSE, C.MID_POSE  ] , Ds = [2.0], toffs = [0.0]  )
+
+
         # my_baxter.control_gripper( mode = "timer" )
 
 
