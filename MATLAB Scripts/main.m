@@ -18,7 +18,9 @@ my_fig_config(  'fontsize',  20, ...
 %% (--) Read Data
 result_dir = "../results/";
 
-file_name  = "20220128_114225.txt";
+file_name  = "20220128_120904.txt";
+%file_name   = "20220128_114431.txt";
+% file_name  = "20220128_114225.txt";
 %file_name  = "20220128_113902.txt";
 %file_name  = "20220127_164210.txt";
 
@@ -94,14 +96,25 @@ title( "shoulder" )
 plot(  raw_data.q_R.time,  raw_data.q_R.value( 2, : ), 'parent', a )
 plot( raw_data.qo_R.time, raw_data.qo_R.value( 2, : ), 'parent', a )
 
+plot(  raw_data2.q_R.time,  raw_data2.q_R.value( 2, : ), 'parent', a )
+plot( raw_data2.qo_R.time, raw_data2.qo_R.value( 2, : ), 'parent', a )
+
+
 f = figure; a = axes( 'parent', f );
 hold on
 title( "elbow" )
 plot(  raw_data.q_R.time,  raw_data.q_R.value( 4, : ), 'parent', a )
 plot( raw_data.qo_R.time, raw_data.qo_R.value( 4, : ), 'parent', a )
 
+plot(  raw_data2.q_R.time,  raw_data2.q_R.value( 4, : ), 'parent', a )
+plot( raw_data2.qo_R.time, raw_data2.qo_R.value( 4, : ), 'parent', a )
+
+
 f = figure; a = axes( 'parent', f );
 hold on
 title( "wrist" ) 
 plot(  raw_data.q_R.time,  raw_data.q_R.value( 6, : ), 'parent', a )
 plot( raw_data.qo_R.time, raw_data.qo_R.value( 6, : ), 'parent', a )
+
+plot(  raw_data2.q_R.time,  raw_data2.q_R.value( 6, : ), 'parent', a )
+plot( raw_data2.qo_R.time, raw_data2.qo_R.value( 6, : ), 'parent', a )
