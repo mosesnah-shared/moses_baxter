@@ -1,6 +1,7 @@
 import cv2
 import argparse
 import pickle
+import math
 import numpy as np
 
 parser = argparse.ArgumentParser()
@@ -42,37 +43,56 @@ while( True ):
         frame = cv2.resize( frame, (0,0), fx = 0.4, fy = 0.4)
         hsv   = cv2.cvtColor( frame, cv2.COLOR_BGR2HSV)
 
+        hh, ww = frame.shape[:2]
+
+
         # The best upper-lower-bound
         lower_yellow = np.array([0, 80, 0])
         upper_yellow = np.array([45, 255, 255])
 
+
         # Here we are defining range of bluecolor in HSV
         # This creates a mask of blue coloured
         # objects found in the frame.
-        mask = cv2.inRange(hsv, lower_yellow, upper_yellow)
-
-        # cv2.imshow( 'raw_mask', mask )
-        # The bitwise and of the frame and mask is done so
-        # that only the blue coloured objects are highlighted
-        # and stored in res
-        frame_masked = cv2.bitwise_and( frame, frame, mask = mask )
+        mask          = cv2.inRange( hsv, lower_yellow, upper_yellow )          # The output is the 2D matrix with zeros and ones
+        frame_masked  = cv2.bitwise_and( frame, frame, mask = mask )            # Simply masking and letting the "yellow" outputs in the frame
+                                                                                # frame_masked is (y, x, 3)
 
 
+        # Changing the figure into gray scale and thresholding again
+        frame_gray = cv2.cvtColor( frame_masked, cv2.COLOR_BGR2GRAY )   # convert img to grayscale
+        thresh     = cv2.threshold( frame_gray, 100, 255, cv2.THRESH_BINARY)[ 1 ]  # threshold
 
-        # blur = cv2.GaussianBlur(final_result, (7, 7), 0)
+        # [REF]
+        kernel = cv2.getStructuringElement( cv2.MORPH_ELLIPSE, (35,35))
+        morph = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, kernel )
 
-        # contours, hierarchy = cv2.findContours( mask.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        # output = cv2.drawContours( res, contours, -1, (0, 0, 255), 3)
-        #
-        # # cv2.imshow('frame',frame)
-        # cv2.imshow('res'     ,res  )
-        # cv2.imshow('contour' ,output )
+        # contours = cv2.findContours( morph, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        contours, hierarchy = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        frame_contour = cv2.drawContours( frame_masked, contours, -1, (0,255,0), 3)
+
+        size_elements = 0
+        for cnt in contours:
+            size_elements += cv2.contourArea( cnt )
+            # print( cv2.contourArea( cnt ) )
 
 
-        # remove noises of the vision data
-        # [REF] https://techvidvan.com/tutorials/detect-objects-of-similar-color-using-opencv-in-python/
-        cv2.imshow( "Images", np.hstack( [ frame, frame_masked ] ) )
 
+        # Fill the polygone
+        img = np.zeros( ( hh, ww ) ) # create a single channel 200x200 pixel black image
+        frame_poly = cv2.fillPoly( img, pts =contours, color=(255,255,255))
+
+        # contours = contours[0] if len(contours) == 2 else contours[1]
+        # for cntr in contours:
+        #     cv2.drawContours( morph, [ cntr ] , 0, ( 0, 255, 0) , -1)
+
+        cv2.imshow( "Images1", frame_masked )
+        cv2.imshow( "Images2", thresh )
+        cv2.imshow( "Images3", morph )
+        cv2.imshow( "Images4", frame_contour )
+        cv2.imshow( "Images5", frame_poly )
+
+        print("rate of fullness : % ", (size_elements/(hh * ww ))*100)
 
 
 
