@@ -10,9 +10,8 @@ import glob                                 # Used to get retrieve files that ha
 import pickle                               # For saving the camera variables
 
                                             # Path to the image that you want to undistort
-PATH                   = "./Images/GESMA_webcam/"
-distorted_img_filename = PATH + "distorted_test2.png"
-
+PATH                   = "./head_camera_images/raw/"
+distorted_img_filename = PATH + "pic_1.png"
                                             # [Chessboard dimensions]
 number_of_squares_X = 10                    # Number of chessboard squares along the x-axis
 number_of_squares_Y = 7                     # Number of chessboard squares along the y-axis
@@ -36,7 +35,7 @@ object_points_3D[ :, :2 ] = np.mgrid[ 0:nY, 0:nX ].T.reshape( -1, 2 )
 
 def main():
 
-  images = glob.glob( PATH + 'opencv_*.png' )                                          # Get the file path for images in the current directory
+  images = glob.glob( PATH + 'pic_*.png' )                                          # Get the file path for images in the current directory
   cnt    = 0
 
   for image_file in images:                                                     # Go through each chessboard image, one by one
@@ -60,7 +59,7 @@ def main():
       cv2.waitKey( 1000 )
 
       # Save the files
-      img_name = "pic_{}.png".format( cnt )
+      img_name = "new_pic_{}.png".format( cnt + 1 )
       cv2.imwrite( img_name, image )
       cnt += 1
 
