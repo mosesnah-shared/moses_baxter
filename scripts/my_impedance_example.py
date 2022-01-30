@@ -29,10 +29,10 @@ from moses_baxter.msg import my_msg
 
 
 class JointImpedanceControl( object ):
-    def __init__( self, publish_data = False ):#, reconfig_server):
+    def __init__( self, args ):#, reconfig_server):
 
-
-        self.publish_data = publish_data           # Boolean, data saved
+        self.args         = args
+        self.publish_data = args.publish_data           # Boolean, data saved
                                                  # Just define the whole arms in the first place to simplify the code
         self.arms        = list( range( 2 ) )    # Since we have both the left/right arms
         self.kins        = list( range( 2 ) )    # Since we have both the left/right arms
@@ -58,8 +58,8 @@ class JointImpedanceControl( object ):
             # Hence, leaving the comments here for future task. Refer to ``gripper_cuff_control.py'' and ``gripper_setup.launch''.
             # self.grips[ idx ].on_type_changed.connect( self.check_calibration )
 
-            self.grips[ idx ].set_holding_force( 100 )  # Initialize the grippers holding force
-            self.grips[ idx ].open(  block = False )    # Open the gripper too
+            # self.grips[ idx ].set_holding_force( 100 )  # Initialize the grippers holding force
+            # self.grips[ idx ].open(  block = False )    # Open the gripper too
 
 
                                    # control parameters
@@ -88,9 +88,16 @@ class JointImpedanceControl( object ):
         # [Moses C. Nah] You need to separately save the output to use the grippers
         self.grip_ctrls = [ GripperConnect( arm ) for arm in C.LIMB_NAMES ]
 
-        # Open the grippers
-        self.grips[ C.RIGHT ].open(  block = False )
-        self.grips[ C.LEFT  ].open(  block = False )
+        # [BACKUP] When you want to control the grippers
+        # Check whether the gripper is opened (100) or closed( 0 )
+        # threshold value is simply 50
+        if self.args.gripper_open:
+            if self.grips[ C.RIGHT ].position( ) <= 50:         # If closed
+                self.grips[ C.RIGHT ].open(  block = False )
+
+            if self.grips[ C.LEFT ].position( ) <= 50:          # if closed
+                self.grips[ C.LEFT ].open(  block = False )
+
 
         self.rs.enable()
 
@@ -262,6 +269,13 @@ class JointImpedanceControl( object ):
         """
             There are two modes to do the controller of the gripper, simple time wait or keyboard
         """
+
+        # If the gripper is already closed, then just wait for a bit and intiate the movements
+        if self.grips[ C.RIGHT ].position( ) <= 50 and self.grips[ C.LEFT ].position( ) <= 50:         # If both are closed
+            rospy.sleep( 3 )
+            return
+
+
         if   mode == "timer":
 
             rospy.sleep( 5 )
@@ -272,45 +286,8 @@ class JointImpedanceControl( object ):
             rospy.sleep( 5 )
 
         elif mode == "keyboard":
-
-            # Control the gripper via keyboard command
-            DONE = False
-
-            left_open  = True
-            right_open = True
-
-            while not DONE :
-                c = baxter_external_devices.getch()     # Get the char input from the Keyboard
-                if c:
-
-                    #catch Esc or ctrl-c
-                    if c in ['\x1b', '\x03']:
-                        DONE = True
-                        rospy.signal_shutdown("Reading Joint Data finished.")
-
-                    if c == "l":
-                        if left_open == True:
-                            self.grips[ C.LEFT  ].open(   block = False )
-
-                        else:
-                            self.grips[ C.LEFT  ].close(  block = False )
-
-                        # Flip the boolean value
-                        left_open = not left_open
-
-                    if c == "r":
-                        if right_open == True:
-                            self.grips[ C.RIGHT ].open(   block = False )
-
-                        else:
-                            self.grips[ C.RIGHT ].close(  block = False )
-
-                        # Flip the boolean value
-                        right_open = not right_open
-
-                    if c== "d":
-                        DONE = True
-                        rospy.loginfo( "Gripper Done"  )
+            # Since the experiment is mostly done by myself, keyboard control is actually not necessary 
+            NotImplementedError()
 
 
 
@@ -340,43 +317,41 @@ def main():
                         dest = 'publish_data',   action = 'store_true',
                         help = 'Save the Data')
 
-    parser.add_argument('-g', '--gripper_on',
-                        dest = 'gripper_on',    action = 'store_true',
-                        help = 'Turn on Gripper')
+    parser.add_argument('-g', '--gripper_open',
+                        dest = 'gripper_open',    action = 'store_true',
+                        help = 'Open the gripper for the initialization')
 
     args = parser.parse_args( rospy.myargv( )[ 1: ] )
 
     print( "Initializing node... " )
     rospy.init_node( "impedance_control_right" )
-    my_baxter = JointImpedanceControl( args.publish_data )
+    my_baxter = JointImpedanceControl( args )
 
     rospy.on_shutdown( my_baxter.clean_shutdown )
 
-    if args.gripper_on:
 
-        #  Can put arrays of pose
-        my_baxter.move2pose( C.RIGHT, [ C.REST_POSE, C.GRASP_POSE_WIDER, C.WIDE_POSE, C.REST_POSE], wait_time = 1, joint_speed = 0.3 )
-        # my_baxter.move2pose( C.LEFT , [ C.REST_POSE, C.GRASP_POSE_WIDER, C.WIDE_POSE, C.REST_POSE], wait_time = 1, joint_speed = 0.3 )
-
-
-        # [Moses C. Nah] [Log] [2021.10.30]
-        # Need improvement for the gripper code but still cannot find the reason
-        # The problem is the gripper always need calibration, and even though it worked, we need to run launch file.
-        # There will be a way to automate this process
-        # my_baxter.control_gripper( mode = "keyboard" )
+    # ==================================================================================================== #
+    # Running the simulation
+    # ==================================================================================================== #
 
 
-    else:
-        # rospy.sleep( 1
-        # my_baxter.move2pose( C.LEFT , C.GRASP_POSE, wait_time = 2, joint_speed = 0.1 )
-        my_baxter.move2pose( C.RIGHT, C.GRASP_POSE, wait_time = 2, joint_speed = 0.2 )
-        my_baxter.move2pose( C.LEFT,  C.GRASP_POSE, wait_time = 2, joint_speed = 0.2 )
+    # ==================================================================================================== #
+    # [Step #1] Setting the gripper
+    # ==================================================================================================== #
 
-        my_baxter.control_gripper( mode = "timer" )
+    my_baxter.move2pose( C.RIGHT, C.GRASP_POSE, wait_time = 2, joint_speed = 0.2 )
+    my_baxter.move2pose( C.LEFT,  C.GRASP_POSE, wait_time = 2, joint_speed = 0.2 )
 
-        # my_baxter.move2pose( C.LEFT , C.GRASP_POSE, wait_time = 2, joint_speed = 0.2 )
-        my_baxter.joint_impedance(  C.BOTH, [ C.GRASP_POSE, C.MID_POSE, C.FINAL_POSE  ] , Ds = [1.0, 1.0], toffs = [0.1, 2.0]  )
-        # my_baxter.joint_impedance(  C.BOTH, [ C.GR`ASP_POSE, C.MID_POSE  ] , Ds = [1.0], toffs = [2.0]  )
+    my_baxter.control_gripper( mode = "timer" )
+
+    # ==================================================================================================== #
+    # [Step #2] Initiate the movement
+    # ==================================================================================================== #
+
+
+    # my_baxter.move2pose( C.LEFT , C.GRASP_POSE, wait_time = 2, joint_speed = 0.2 )
+    my_baxter.joint_impedance(  C.BOTH, [ C.GRASP_POSE, C.MID_POSE, C.FINAL_POSE  ] , Ds = [1.0, 1.0], toffs = [0.1, 2.0]  )
+    # my_baxter.joint_impedance(  C.BOTH, [ C.GR`ASP_POSE, C.MID_POSE  ] , Ds = [1.0], toffs = [2.0]  )
 
 
 
