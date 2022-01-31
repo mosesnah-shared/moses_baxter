@@ -341,9 +341,10 @@ def main():
     # [Step #1] Setting the gripper
     # ==================================================================================================== #
 
-    my_baxter.move2pose( C.RIGHT, C.GRASP_POSE, wait_time = 2, joint_speed = 0.2 )
-    my_baxter.move2pose( C.LEFT,  C.GRASP_POSE, wait_time = 2, joint_speed = 0.2 )
+    my_baxter.move2pose( C.RIGHT, C.FINAL_POSE, wait_time = 2, joint_speed = 0.2 )
+    my_baxter.move2pose( C.LEFT,  C.FINAL_POSE, wait_time = 2, joint_speed = 0.2 )
 
+    rospy.spin( )
     exit( )
     my_baxter.control_gripper( mode = "timer" )
 
