@@ -286,7 +286,7 @@ class JointImpedanceControl( object ):
             rospy.sleep( 5 )
 
         elif mode == "keyboard":
-            # Since the experiment is mostly done by myself, keyboard control is actually not necessary 
+            # Since the experiment is mostly done by myself, keyboard control is actually not necessary
             NotImplementedError()
 
 
@@ -334,6 +334,8 @@ def main():
     # Running the simulation
     # ==================================================================================================== #
 
+    # Can get the value via rosparam
+    tmp = rospy.get_param( 'my_obj_func' )
 
     # ==================================================================================================== #
     # [Step #1] Setting the gripper
@@ -342,6 +344,7 @@ def main():
     my_baxter.move2pose( C.RIGHT, C.GRASP_POSE, wait_time = 2, joint_speed = 0.2 )
     my_baxter.move2pose( C.LEFT,  C.GRASP_POSE, wait_time = 2, joint_speed = 0.2 )
 
+    exit( )
     my_baxter.control_gripper( mode = "timer" )
 
     # ==================================================================================================== #
@@ -354,6 +357,7 @@ def main():
     # my_baxter.joint_impedance(  C.BOTH, [ C.GR`ASP_POSE, C.MID_POSE  ] , Ds = [1.0], toffs = [2.0]  )
 
 
+    # Getting the value of the movements.
 
 
 

@@ -3,6 +3,7 @@ import argparse
 import pickle
 import math
 import numpy as np
+import rospy
 
 parser = argparse.ArgumentParser()
 
@@ -78,7 +79,7 @@ while( True ):
 
 
 
-        # Fill the polygone
+        # Fill the polygon
         img = np.zeros( ( hh, ww ) ) # create a single channel 200x200 pixel black image
         frame_poly = cv2.fillPoly( img, pts =contours, color=(255,255,255))
 
@@ -92,8 +93,10 @@ while( True ):
         cv2.imshow( "Images4", frame_contour )
         cv2.imshow( "Images5", frame_poly )
 
-        print("rate of fullness : % ", (size_elements/(hh * ww ))*100)
+        cov_val = (size_elements/(hh * ww ))*100
+        print("rate of fullness : % ", cov_val )
 
+        rospy.set_param( 'my_obj_func', cov_val )
 
 
 
