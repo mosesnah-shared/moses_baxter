@@ -9,6 +9,7 @@ import time
 import rospy
 import numpy as np
 import sys
+import nlopt
 
 # BAXTER Libraries
 import baxter_interface
@@ -275,7 +276,6 @@ class JointImpedanceControl( object ):
             rospy.sleep( 3 )
             return
 
-
         if   mode == "timer":
 
             rospy.sleep( 5 )
@@ -321,6 +321,10 @@ def main():
                         dest = 'gripper_open',    action = 'store_true',
                         help = 'Open the gripper for the initialization')
 
+    parser.add_argument('-o', '--run_optimization',
+                        dest = 'is_run_optimization',    action = 'store_true',
+                        help = 'Running the optimization of the whole process')
+
     args = parser.parse_args( rospy.myargv( )[ 1: ] )
 
     print( "Initializing node... " )
@@ -334,31 +338,86 @@ def main():
     # Running the simulation
     # ==================================================================================================== #
 
-    # Can get the value via rosparam
-    tmp = rospy.get_param( 'my_obj_func' )
+    if args.is_run_optimization:
 
-    # ==================================================================================================== #
-    # [Step #1] Setting the gripper
-    # ==================================================================================================== #
-
-    my_baxter.move2pose( C.RIGHT, C.FINAL_POSE, wait_time = 2, joint_speed = 0.2 )
-    my_baxter.move2pose( C.LEFT,  C.FINAL_POSE, wait_time = 2, joint_speed = 0.2 )
-
-    rospy.spin( )
-    exit( )
-    my_baxter.control_gripper( mode = "timer" )
-
-    # ==================================================================================================== #
-    # [Step #2] Initiate the movement
-    # ==================================================================================================== #
+        # Find the input parameters (input_pars) that are aimed to be optimized
+        # Possible options (written in integer values) are as follows
+        # [REF] https://nlopt.readthedocs.io/en/latest/NLopt_Algorithms/
+        idx       = 0
+        #   idx are                 0                   1               2               3                  4
+        idx_opt   = [ nlopt.GN_DIRECT_L, nlopt.GN_DIRECT_L_RAND, nlopt.GN_DIRECT, nlopt.GN_CRS2_LM, nlopt.GN_ESCH  ]
 
 
-    # my_baxter.move2pose( C.LEFT , C.GRASP_POSE, wait_time = 2, joint_speed = 0.2 )
-    my_baxter.joint_impedance(  C.BOTH, [ C.GRASP_POSE, C.MID_POSE, C.FINAL_POSE  ] , Ds = [1.0, 1.0], toffs = [0.1, 2.0]  )
-    # my_baxter.joint_impedance(  C.BOTH, [ C.GR`ASP_POSE, C.MID_POSE  ] , Ds = [1.0], toffs = [2.0]  )
+        # The upper and lower bound of the parameters of Baxter
+        lb    = np.array( [ 0.8 ] )
+        ub    = np.array( [ 3.0 ] )
+        n_opt = 1
+
+        algorithm = idx_opt[ idx ]                                              # Selecting the algorithm to be executed
+        opt       = nlopt.opt( algorithm, n_opt )                               # Defining the class for optimization
+
+        opt.set_lower_bounds( lb )
+        opt.set_upper_bounds( ub )
+        opt.set_maxeval( 5   )
+
+        init = ( lb + ub ) * 0.5 + 0.05 * lb                                    # Setting an arbitrary non-zero initial step
 
 
-    # Getting the value of the movements.
+        my_baxter.move2pose( C.RIGHT, C.GRASP_POSE, wait_time = 2, joint_speed = 0.2 )
+        my_baxter.move2pose( C.LEFT,  C.GRASP_POSE, wait_time = 2, joint_speed = 0.2 )
+
+        my_baxter.control_gripper( mode = "timer" )
+
+        def nlopt_objective( pars, grad ):                                      # Defining the objective function that we are aimed to optimize.
+
+            # Run Baxter - Code implementation here
+            # Manipulating the cloth
+            # [STEP #1] Move to initial posture
+
+            my_baxter.move2pose( C.RIGHT, C.GRASP_POSE, wait_time = 2, joint_speed = 0.2 )
+            my_baxter.move2pose( C.LEFT,  C.GRASP_POSE, wait_time = 2, joint_speed = 0.2 )
+
+            # [STEP #2] Initiate movement
+            my_baxter.joint_impedance(  C.BOTH, [ C.GRASP_POSE, C.MID_POSE, C.FINAL_POSE  ] , Ds = [ pars[0], 1 ], toffs = [0.3, 5]  )
+
+            # Get Baxter's tablecloth performance
+            obj = rospy.get_param( 'my_obj_func' )
+            print( "[Iteration] ", opt.get_numevals( ) , " [Duration] ", pars, " [obj] ", obj )
+
+            my_baxter.joint_impedance(  C.BOTH, [ C.FINAL_POSE, C.GRASP_POSE  ] , Ds = 5, toffs = [3]  )
+
+            return 100 - obj # Inverting the value
+
+        opt.set_min_objective( nlopt_objective )
+        opt.set_stopval( 2 )                                                    # If value is within 98~100% (i.e., 0~2%)
+        xopt = opt.optimize( init )                                             # Start at the mid-point of the lower and upper bound
+
+    # ============================================================================= #
+
+    elif not args.is_run_optimization:
+
+        # Can get the value via rosparam
+        tmp = rospy.get_param( 'my_obj_func' )
+
+        # ==================================================================================================== #
+        # [Step #1] Setting the gripper
+        # ==================================================================================================== #
+
+        my_baxter.move2pose( C.RIGHT, C.GRASP_POSE, wait_time = 2, joint_speed = 0.2 )
+        my_baxter.move2pose( C.LEFT,  C.GRASP_POSE, wait_time = 2, joint_speed = 0.2 )
+
+        # my_baxter.control_gripper( mode = "timer" )
+
+        # ==================================================================================================== #
+        # [Step #2] Initiate the movement
+        # ==================================================================================================== #
+
+
+
+
+        # my_baxter.move2pose( C.LEFT , C.GRASP_POSE, wait_time = 2, joint_speed = 0.2 )
+        my_baxter.joint_impedance(  C.BOTH, [ C.GRASP_POSE, C.MID_POSE, C.FINAL_POSE  ] , Ds = [1.0, 1.0], toffs = [0.1, 2.0]  )
+        # my_baxter.joint_impedance(  C.BOTH, [ C.GR`ASP_POSE, C.MID_POSE  ] , Ds = [1.0], toffs = [2.0]  )
 
 
 

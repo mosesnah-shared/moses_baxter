@@ -45,6 +45,15 @@ class Constants:
     #                                                   1.5 rad for seeing down, -1.5 for seeing up
     #               Note that these joint correspond to "not flip joints"
 
+    REST_POSE  = {  's0' : 0.7869321442,
+                    's1' : 0.0,
+                    'e0' : -0.0149563127,
+                    'e1' : 1.41,
+                    'w0' : -0.0464029188,
+                    'w1' :  0.0,
+                    'w2' : -1.5823011827 }
+
+
     GRASP_POSE = {  's0' : 0.7869321442,
                     's1' : 0.4045874328,
                     'e0' : -0.0149563127,
@@ -72,6 +81,7 @@ class Constants:
     # IMPEDANCE PARAMETERS
     # # Case 1 - original 2022.01.28
     JOINT_IMP1_Kq = { 's0': 10.0,
+            #
                       's1': 15.0,
                       'e0':  5.0,
                       'e1': 15.0,
