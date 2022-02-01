@@ -28,7 +28,7 @@ class CameraCalibrate( object ):
 
     def __init__( self ):
         self.rate  = 100.0   # Hz
-        self.Nmax  = 10     # Maximum 10 photos
+        self.Nmax  = 4     # Maximum 10 photos
 
         # Subscribe to head_camera image topic
         rospy.init_node( 'my_camera_subscriber', anonymous = True ) # Initialze ROS node
@@ -41,7 +41,8 @@ class CameraCalibrate( object ):
 
         # crop the image, since the camera is sort of broken (REF: "baxter_camera/head_camera_images/why_crop"
         # The right part of the image should be cropped, the best pixel width number was 900
-        self.cv_image_cropped = self.cv_image[0:-1, 0:950]
+        # self.cv_image_cropped = self.cv_image[0:-1, 0:950]
+        self.cv_image_cropped = self.cv_image
         cv2.imshow( 'Image', self.cv_image_cropped ) # display image
 
         cv2.waitKey( 1 )
