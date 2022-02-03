@@ -62,6 +62,20 @@ class Camera( object ):
             print( "Completing polygon with %d points." % len(self.points))
             self.done = True
 
+    def mask_color( self, img, lower_bound, upper_bound ):
+
+        hsv = cv2.cvtColor( img, cv2.COLOR_BGR2HSV )
+
+        lb = np.array( lower_bound )
+        ub = np.array( upper_bound )
+
+        mask       = cv2.inRange( hsv, lb, ub )                                 # Return the img in 0 or 255, which is simply a boolean
+        img_masked = cv2.bitwise_and( img, img, mask = mask )                   # Simply masking and letting the "masked color" outputs in the frame
+                                                                                # If the mask element is nonzero,
+
+        return img_masked
+
+
     def draw_platform( self ):
 
         # Code for detecting the platform, either manually or via computer algorithm
@@ -71,7 +85,7 @@ class Camera( object ):
         cv2.setMouseCallback( "platform", self.on_mouse )
 
         self.done    = False        # Flag signalling we're done
-        self.current = (0, 0)       # Current position, so we can draw the line-in-progress
+        self.current = ( 0, 0 )     # Current position, so we can draw the line-in-progress
         self.points  = []           # Empty List of points defining our polygon
 
         while( not self.done ):
@@ -98,6 +112,7 @@ class Camera( object ):
             cv2.fillPoly( img_platform_masked, np.array( [ self.points ] ), FINAL_LINE_COLOR )
 
         cv2.imshow( "platform_masked", img_platform_masked )
+        print( "points are ", self.points )
         k = cv2.waitKey( 0 )                    # Wait for 1ms and get the key input
 
 
@@ -111,32 +126,29 @@ class Camera( object ):
 
                 # If frame grabbed, then continue
                 img_raw = cv2.resize(   img_raw, ( 0,0 ), fx = self.scl, fy = self.scl )
-                hsv     = cv2.cvtColor( img_raw, cv2.COLOR_BGR2HSV)
+                img_yellow_contour = img_raw.copy( )
+
 
                 self.img_h, self.img_w = self.get_img_size( img_raw )
                 img_platform_masked    = np.zeros( ( self.img_h, self.img_w ) , np.uint8 )
 
                 if ( len( platform_points ) > 0):
-                    cv2.fillPoly( img_platform_masked, np.array( [ platform_points ] ), (255, 0, 0) )
-
-                # cv2.imshow( "platform_masked", img_platform_masked )
+                    cv2.fillPoly( img_platform_masked, np.array( [ platform_points ] ), ( 255, 0, 0 ) )
 
                 # [Step #1] Masking out the lower and upper bound of the yellow
-                mask               = cv2.inRange( hsv, np.array( C.COLOR_LOWER_BOUND_YELLOW ), np.array( C.COLOR_UPPER_BOUND_YELLOW ) )     # The output is the 2D matrix with zeros and ones
-                img_yellow_masked  = cv2.bitwise_and( img_raw, img_raw, mask = mask )                                   # Simply masking and letting the "yellow" outputs in the frame
-                img_yellow_contour = cv2.bitwise_and( img_raw, img_raw, mask = mask )                                   # Simply masking and letting the "yellow" outputs in the frame
-
+                img_masked = self.mask_color( img_raw, C.COLOR_LOWER_BOUND_YELLOW, C.COLOR_UPPER_BOUND_YELLOW )
 
                 # [Step #2] Changing again the figure to gray scale and thresholding to clean up
-                img_tmp = cv2.cvtColor( img_yellow_masked, cv2.COLOR_BGR2GRAY )   # convert img to grayscale
+                img_tmp = cv2.cvtColor( img_masked, cv2.COLOR_BGR2GRAY )
                 thresh  = cv2.threshold( img_tmp, 100, 255, cv2.THRESH_BINARY)[ 1 ]  # threshold
 
                 # [Step #3] Find the polygon for the fill
+                #           Before that, fill in the empty dots before drawing the contou
                 kernel = cv2.getStructuringElement( cv2.MORPH_ELLIPSE, ( 35,35 ) )
                 morph  = cv2.morphologyEx( thresh, cv2.MORPH_CLOSE, kernel )
 
-                contours, hierarchy = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-                cv2.drawContours( img_yellow_contour, contours, -1, (0,255,0), 3)
+                contours, hierarchy = cv2.findContours( thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE )
+                cv2.drawContours( img_yellow_contour, contours, -1, ( 0,255,0 ), 3 )
 
                 size_elements = 0
                 for cnt in contours:
@@ -146,20 +158,20 @@ class Camera( object ):
                 img_filled = cv2.fillPoly( np.zeros( ( self.img_h, self.img_w ) ), pts = contours, color = ( 255, 255, 255 ) )
 
                 # [Step #5] Draw all the images
-                # cv2.imshow( "main"          , img_raw            )
-                # cv2.imshow( "yellow_masked" , img_yellow_masked  )
-                # cv2.imshow( "yellow_contour", img_yellow_contour )
-                # cv2.imshow( "filled"        , img_filled         )
+                cv2.imshow( "main"           , img_raw            )
+                # cv2.imshow( "yellow_masked"  , img_masked         )
+                cv2.imshow( "yellow_contour" , img_yellow_contour )
+
 
                 tmp1 = ( img_platform_masked == 255 )
-                tmp2 = ( img_filled == 255 )
-                tmp_overlap = np.logical_and( tmp1, tmp2  )
+                tmp2 = (          img_filled == 255 )
+
+                tmp_overlap = np.logical_and( tmp1, tmp2 )
 
                 over_lap = 255 * tmp_overlap.astype( np.uint8 )
                 over_lap = cv2.cvtColor( over_lap, cv2.COLOR_GRAY2RGB )
 
                 b, g, r = cv2.split( over_lap )
-
 
                 zeros_ch = np.zeros( ( self.img_h, self.img_w ), dtype="uint8")
                 blue_img = cv2.merge( [b, zeros_ch, zeros_ch] )
@@ -204,7 +216,5 @@ if __name__ == "__main__":
 
     else:
 
-        points = ( ( 346,134 ), ( 345, 362 ), ( 658, 320 ), ( 583, 113 )  )
+        points = [ (318, 107), (306, 320), (621, 291), (559, 91)] 
         my_cam.run( platform_points = points )
-
-        args.points = []

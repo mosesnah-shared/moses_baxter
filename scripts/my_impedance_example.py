@@ -283,8 +283,6 @@ class JointImpedanceControl( object ):
             self.grips[ C.RIGHT ].close(  block = False )
             self.grips[ C.LEFT  ].close(  block = False )
 
-            rospy.sleep( 5 )
-
         elif mode == "keyboard":
             # Since the experiment is mostly done by myself, keyboard control is actually not necessary
             NotImplementedError()
@@ -358,15 +356,19 @@ def main():
 
         opt.set_lower_bounds( lb )
         opt.set_upper_bounds( ub )
-        opt.set_maxeval( 5   )
+        opt.set_maxeval( 50 )
 
         init = ( lb + ub ) * 0.5 + 0.05 * lb                                    # Setting an arbitrary non-zero initial step
 
-
         my_baxter.move2pose( C.RIGHT, C.GRASP_POSE, wait_time = 2, joint_speed = 0.2 )
         my_baxter.move2pose( C.LEFT,  C.GRASP_POSE, wait_time = 2, joint_speed = 0.2 )
-
+        #
         my_baxter.control_gripper( mode = "timer" )
+
+        tmp_t = 95 # If the coverage is higher than this value, simply set it as 100 and stop optimizaiton
+
+        input( "Ready for optimization, press any key to continue" )
+
 
         def nlopt_objective( pars, grad ):                                      # Defining the objective function that we are aimed to optimize.
 
@@ -382,14 +384,16 @@ def main():
 
             # Get Baxter's tablecloth performance
             obj = rospy.get_param( 'my_obj_func' )
+
+            obj = 100.0 if obj >= tmp_t else obj
+
             print( "[Iteration] ", opt.get_numevals( ) , " [Duration] ", pars, " [obj] ", obj )
 
-            my_baxter.joint_impedance(  C.BOTH, [ C.FINAL_POSE, C.GRASP_POSE  ] , Ds = 5, toffs = [3]  )
-
-            return 100 - obj # Inverting the value
+            # my_baxter.joint_impedance(  C.BOTH, [ C.FINAL_POSE, C.GRASP_POSE  ] , Ds = 5, toffs = [2]  )
+            return 100.0 - obj # Inverting the value
 
         opt.set_min_objective( nlopt_objective )
-        opt.set_stopval( 2 )                                                    # If value is within 98~100% (i.e., 0~2%)
+        opt.set_stopval( 1e-6    )                                              # If value is within 98~100% (i.e., 0~2%)
         xopt = opt.optimize( init )                                             # Start at the mid-point of the lower and upper bound
 
     # ============================================================================= #
@@ -397,14 +401,14 @@ def main():
     elif not args.is_run_optimization:
 
         # Can get the value via rosparam
-        tmp = rospy.get_param( 'my_obj_func' )
+
 
         # ==================================================================================================== #
         # [Step #1] Setting the gripper
         # ==================================================================================================== #
 
-        my_baxter.move2pose( C.RIGHT, C.GRASP_POSE, wait_time = 2, joint_speed = 0.2 )
-        my_baxter.move2pose( C.LEFT,  C.GRASP_POSE, wait_time = 2, joint_speed = 0.2 )
+        my_baxter.move2pose( C.RIGHT, C.LIFT_POSE, wait_time = 2, joint_speed = 0.2 )
+        my_baxter.move2pose( C.LEFT,  C.LIFT_POSE, wait_time = 2, joint_speed = 0.2 )
 
         # my_baxter.control_gripper( mode = "timer" )
 
@@ -412,11 +416,11 @@ def main():
         # [Step #2] Initiate the movement
         # ==================================================================================================== #
 
-
+        # rospy.sleep( 5 )
 
 
         # my_baxter.move2pose( C.LEFT , C.GRASP_POSE, wait_time = 2, joint_speed = 0.2 )
-        my_baxter.joint_impedance(  C.BOTH, [ C.GRASP_POSE, C.MID_POSE, C.FINAL_POSE  ] , Ds = [1.0, 1.0], toffs = [0.1, 2.0]  )
+        # my_baxter.joint_impedance(  C.BOTH, [ C.GRASP_POSE, C.MID_POSE, C.FINAL_POSE  ] , Ds = [1.0, 1.0], toffs = [0.1, 2.0]  )
         # my_baxter.joint_impedance(  C.BOTH, [ C.GR`ASP_POSE, C.MID_POSE  ] , Ds = [1.0], toffs = [2.0]  )
 
 
