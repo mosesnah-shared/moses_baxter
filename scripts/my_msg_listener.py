@@ -38,7 +38,7 @@ class myListener( ):
         self.on   = True
 
         self.ti   = rospy.Time.now()
-        self.MAX_TIME = 30
+        self.MAX_TIME = 40
 
     def callback( self, data ):
         self.on = data.on

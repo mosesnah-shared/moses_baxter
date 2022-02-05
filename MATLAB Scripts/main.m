@@ -5,7 +5,6 @@
 %
 % [Emails]         Moses C. Nah   : mosesnah@mit.edu
 %% (--) INITIALIZATION
-%% (--) INITIALIZATION
 
 clear all; close all; clc;
 workspace;
@@ -18,18 +17,15 @@ my_fig_config(  'fontsize',  20, ...
 %% (--) Read Data
 result_dir = "../results/";
 
-file_name  = "20220128_120904.txt";
-%file_name   = "20220128_114431.txt";
-% file_name  = "20220128_114225.txt";
-%file_name  = "20220128_113902.txt";
-%file_name  = "20220127_164210.txt";
+file_name  = "chatter_effect.txt";
+
 
 file_name  = result_dir + file_name;
 
 fid      = fopen( file_name );                                         % Opening the txt file with the name "txtName"
 raw_data = struct();
 
-N = 5000; % Defining the size of the array
+N = 20000; % Defining the size of the array
 
 raw_data.qo_L.time  = nan( 1,  N );
 raw_data.qo_L.value = nan( 7,  N );
@@ -86,35 +82,54 @@ while( ~feof( fid ) )
    
 end
 
+% Cleaning up all the NaN inside the matrix 
+fn = fieldnames( raw_data );
 
-%% Plotting the ZFT and actual
+for k = 1: numel( fn )
+    raw_data.( fn{ k } ).time  = raw_data.( fn{ k } ).time(  ~isnan( raw_data.( fn{ k } ).time  ) );
+end
+
+% Getting the size of the data based on the time
+
+for k = 1: numel( fn )
+    N = length( raw_data.( fn{ k } ).time );
+    raw_data.( fn{ k } ).value = raw_data.( fn{ k } ).value( :, 1:N );
+end
+    
+
+ %% Plotting the ZFT and actual
 % Index 2, 4 and 6 are s1, e1, w1, right hand
 
-f = figure; a = axes( 'parent', f );
-hold on
-title( "shoulder" )
-plot(  raw_data.q_R.time,  raw_data.q_R.value( 2, : ), 'parent', a )
-plot( raw_data.qo_R.time, raw_data.qo_R.value( 2, : ), 'parent', a )
-
-plot(  raw_data2.q_R.time,  raw_data2.q_R.value( 2, : ), 'parent', a )
-plot( raw_data2.qo_R.time, raw_data2.qo_R.value( 2, : ), 'parent', a )
-
-
-f = figure; a = axes( 'parent', f );
-hold on
-title( "elbow" )
-plot(  raw_data.q_R.time,  raw_data.q_R.value( 4, : ), 'parent', a )
-plot( raw_data.qo_R.time, raw_data.qo_R.value( 4, : ), 'parent', a )
-
-plot(  raw_data2.q_R.time,  raw_data2.q_R.value( 4, : ), 'parent', a )
-plot( raw_data2.qo_R.time, raw_data2.qo_R.value( 4, : ), 'parent', a )
+% f = figure; a = axes( 'parent', f );
+% hold on
+% title( "shoulder" )
+% plot(  raw_data.q_R.time,  raw_data.q_R.value( 2, : ), 'parent', a )
+% plot( raw_data.qo_R.time, raw_data.qo_R.value( 2, : ), 'parent', a )
+% 
+% 
+% f = figure; a = axes( 'parent', f );
+% hold on
+% title( "elbow" )
+% plot(  raw_data.q_R.time,  raw_data.q_R.value( 4, : ), 'parent', a )
+% plot( raw_data.qo_R.time, raw_data.qo_R.value( 4, : ), 'parent', a )
 
 
 f = figure; a = axes( 'parent', f );
 hold on
 title( "wrist" ) 
-plot(  raw_data.q_R.time,  raw_data.q_R.value( 6, : ), 'parent', a )
-plot( raw_data.qo_R.time, raw_data.qo_R.value( 6, : ), 'parent', a )
+Ni = 1100;
 
-plot(  raw_data2.q_R.time,  raw_data2.q_R.value( 6, : ), 'parent', a )
-plot( raw_data2.qo_R.time, raw_data2.qo_R.value( 6, : ), 'parent', a )
+% for i = 1 : 7
+
+plot(  raw_data.q_L.time( Ni : end ),  raw_data.dq_L.value( 6, Ni:end ), 'parent', a , 'color', [0.8500 0.3250 0.0980] )
+plot(  raw_data.q_L.time( Ni : end ),  raw_data.tau_L.value( 6, Ni:end ), 'parent', a, 'color', [0.4940 0.1840 0.5560] )
+
+% end
+set( a, 'xlim', [ raw_data.q_L.time( Ni ), max( raw_data.q_L.time ) ] )
+set( a, 'fontsize', 40)
+
+
+legend( "dq", "tau", "location", "northwest", 'fontsize', 50  )
+xlabel( "Time (sec)", 'fontsize', 50 ); 
+ylabel( "Angle (rad)", 'fontsize', 50 );
+% legend( "s0", "s1", "e0", "e1", "w0", "w1", "w2", "location", "northeastoutside"  )
