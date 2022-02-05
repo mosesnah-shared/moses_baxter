@@ -347,16 +347,17 @@ def main():
 
 
         # The upper and lower bound of the parameters of Baxter
-        lb    = np.array( [ 0.8 ] )
-        ub    = np.array( [ 3.0 ] )
-        n_opt = 1
+        # D1, D2 and toffset
+        lb    = np.array( [ 0.7, 0.7, 0.0 ] )
+        ub    = np.array( [ 3.0, 3.0, 1.0 ] )
+        n_opt = 3
 
         algorithm = idx_opt[ idx ]                                              # Selecting the algorithm to be executed
         opt       = nlopt.opt( algorithm, n_opt )                               # Defining the class for optimization
 
         opt.set_lower_bounds( lb )
         opt.set_upper_bounds( ub )
-        opt.set_maxeval( 10 )
+        opt.set_maxeval( 15 )
 
         init = ( lb + ub ) * 0.5 + 0.05 * lb                                    # Setting an arbitrary non-zero initial step
 
@@ -376,21 +377,19 @@ def main():
             # Manipulating the cloth
             # [STEP #1] Move to initial posture
 
-            my_baxter.move2pose( C.RIGHT, C.GRASP_POSE, wait_time = 2, joint_speed = 0.2 )
-            my_baxter.move2pose( C.LEFT,  C.GRASP_POSE, wait_time = 2, joint_speed = 0.2 )
-
             # [STEP #2] Initiate movement
-            my_baxter.joint_impedance(  C.BOTH, [ C.GRASP_POSE, C.MID_POSE, C.FINAL_POSE  ] , Ds = [ pars[0], 1 ], toffs = [0.3, 5]  )
+            my_baxter.joint_impedance(  C.BOTH, [ C.GRASP_POSE, C.MID_POSE, C.FINAL_POSE  ] , Ds = [ pars[ 0 ], pars[ 1 ] ], toffs = [ pars[ 2 ], 5]  )
 
             # Get Baxter's tablecloth performance
             obj = rospy.get_param( 'my_obj_func' )
 
-            obj = 100.0 if obj >= tmp_t else obj
+            if obj >= tmp_t:
+                obj = 100.0
 
             print( "[Iteration] ", opt.get_numevals( ) , " [Duration] ", pars, " [obj] ", obj )
 
             my_baxter.joint_impedance(  C.BOTH, [ C.FINAL_POSE, C.LIFT_POSE   ], Ds = 5, toffs = [1]  )
-            my_baxter.joint_impedance(  C.BOTH, [ C.LIFT_POSE , C.GRASP_POSE  ], Ds = 5, toffs = [1]  )
+            my_baxter.joint_impedance(  C.BOTH, [ C.LIFT_POSE , C.GRASP_POSE  ], Ds = 5, toffs = [3]  )
 
             return 100.0 - obj # Inverting the value
 

@@ -216,5 +216,5 @@ if __name__ == "__main__":
 
     else:
 
-        points = [ (291, 69), (243, 339), (661, 320), (582, 66) ]
+        points =  [(337, 167), (318, 368), (603, 363), (563, 164)]
         my_cam.run( platform_points = points )
