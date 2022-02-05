@@ -90,7 +90,6 @@ class Constants:
     # IMPEDANCE PARAMETERS
     # # Case 1 - original 2022.01.28
     JOINT_IMP1_Kq = { 's0': 10.0,
-            #
                       's1': 15.0,
                       'e0':  5.0,
                       'e1': 15.0,
@@ -122,5 +121,5 @@ class Constants:
                       'e0': 2.5,
                       'e1': 7.5,
                       'w0': 0.1,
-                      'w1': 4.0,
+                      'w1': 1.0,
                       'w2': 1.5  }
