@@ -136,6 +136,7 @@ class Camera( object ):
                     cv2.fillPoly( img_platform_masked, np.array( [ platform_points ] ), ( 255, 0, 0 ) )
 
                 # [Step #1] Masking out the lower and upper bound of the yellow
+                # img_masked = self.mask_color( img_raw, C.COLOR_LOWER_BOUND_YELLOW, C.COLOR_UPPER_BOUND_YELLOW )
                 img_masked = self.mask_color( img_raw, C.COLOR_LOWER_BOUND_YELLOW, C.COLOR_UPPER_BOUND_YELLOW )
 
                 # [Step #2] Changing again the figure to gray scale and thresholding to clean up
@@ -216,5 +217,7 @@ if __name__ == "__main__":
 
     else:
 
-        points =  [(337, 167), (318, 368), (603, 363), (563, 164)]
+        points = [ (409, 164), (401, 367), (673, 358), (625, 166) ]
+
+        # points =  [(337, 167), (318, 368), (603, 363), (563, 164)]
         my_cam.run( platform_points = points )

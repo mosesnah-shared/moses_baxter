@@ -133,3 +133,46 @@ legend( "dq", "tau", "location", "northwest", 'fontsize', 50  )
 xlabel( "Time (sec)", 'fontsize', 50 ); 
 ylabel( "Angle (rad)", 'fontsize', 50 );
 % legend( "s0", "s1", "e0", "e1", "w0", "w1", "w2", "location", "northeastoutside"  )
+
+
+%% (--) Optimization Data analysis
+
+result_dir = "../results/optimization/";
+
+file_name  = "36x42.txt";
+
+file_name  = result_dir + file_name;
+
+fid      = fopen( file_name );                                         % Opening the txt file with the name "txtName"
+raw_data = struct();
+n = 500;
+raw_data.iter   = nan( 1, n );
+raw_data.par1   = nan( 1, n );
+raw_data.par2   = nan( 1, n );
+raw_data.par3   = nan( 1, n );
+raw_data.par4   = nan( 1, n );
+raw_data.output = nan( 1, n );
+
+
+i = 1;
+while( ~feof( fid ) )
+
+    
+    % First string is time and second string is the name of the variable    
+    tline  = fgetl( fid );                                             % Get the txt file
+    
+    % Getting all the values
+    values = regexp( tline , '[+-]?([0-9]*[.])?[0-9]+', 'match' );            % Taking out the string inside the bracket (i.e., without the bracket)
+    values = str2double( values );
+    
+    raw_data.iter( i ) = values( 1 ) + 1;
+    raw_data.par1( i ) = values( 2 );
+    raw_data.par2( i ) = values( 3 );
+    raw_data.par3( i ) = values( 4 );
+    raw_data.par4( i ) = values( 5 );
+    
+    raw_data.output( i ) = values( 6 );
+    
+    i = i + 1;
+end
+

@@ -29,6 +29,9 @@ class Constants:
     COLOR_LOWER_BOUND_YELLOW = [  0,  80,   0 ]
     COLOR_UPPER_BOUND_YELLOW = [ 45, 255, 255 ]
 
+    COLOR_LOWER_BOUND_RED   = [170, 70, 50]
+    COLOR_UPPER_BOUND_RED   = [180,255,255]
+
     LEFT_JOINT_NAMES  = [  "left_s0",  "left_s1",  "left_e0",  "left_e1",  "left_w0",  "left_w1",  "left_w2" ]
     RIGHT_JOINT_NAMES = [ "right_s0", "right_s1", "right_e0", "right_e1", "right_w0", "right_w1", "right_w2" ]
     JOINT_NAMES       = [       "s0",       "s1",       "e0",       "e1",       "w0",       "w1",       "w2" ]
