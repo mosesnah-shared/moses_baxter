@@ -10,8 +10,9 @@ import rospy
 
 from my_constants import Constants as C
 
-FINAL_LINE_COLOR = (255, 255, 255)
-WORKING_LINE_COLOR = (127, 127, 127)
+FINAL_LINE_COLOR   = ( 255, 255, 255 )
+WORKING_LINE_COLOR = ( 127, 127, 127 )
+
 
 class Camera( object ):
 
@@ -19,9 +20,9 @@ class Camera( object ):
 
         self.args = args
         self.vid  = cv2.VideoCapture( 0 )   # Turn on webcam
-        self.scl  = args.scale              # The scale of the image
+        self.img  = None                    # The current image of the main window that we often refer to
 
-        if args.calibrated:
+        if args.calibrated:     # [2022.03.10] We can calibrate the camera to take off the fish-bowl distortion effect.
             NotImplementedError( )
             # [Moses C. Nah] [BACKUP]
             # We've checked that calibration is not required yet
@@ -42,25 +43,49 @@ class Camera( object ):
             #     # frame       = undistorted_image[y:y+h, x:x+w]                           # Rewriting the frame
             #     cv2.imshow('frame', undistorted_image)                                    # Display the resulting frame
 
-    def get_img_size( self, img ):
+    def _get_img( self, scl = 0.5, mode = "hsv" ):
+
+        assert mode in [ "rgb", "hsv", "gray" ]
+
+        grabbed = False
+
+        if not grabbed:
+            ( grabbed, img ) = self.vid.read( )
+
+        img = cv2.resize( img, ( 0,0 ), fx = scl, fy = scl )
+
+        if   mode == "gray":
+            img = cv2.cvtColor( img, cv2.COLOR_BGR2GRAY )
+
+        elif mode == "hsv":
+            img = cv2.cvtColor( img, cv2.COLOR_BGR2HSV  )
+
+        # If rgb, then do nothing
+
+        return img
+
+    def _mouse_get_pos_and_color( self, event, x, y, buttons, pars ):
+
+        if event == cv2.EVENT_LBUTTONDOWN:
+            print( "[Clicked Pixel] ({0:d},{1:d}), with Color {2:}".format( x, y, self.img[ y, x ] ) )
+
+    def _get_img_size( self, img ):
         return ( img.shape[ : 2 ] )
 
-    def on_mouse( self, event, x, y, buttons, user_param ):
+    def _get_pos_and_color( self, mode = "hsv", scl = 0.5 ):
 
-        # Mouse callback that gets called for every mouse event (i.e. moving, clicking, etc.)
-        if self.done: # Nothing more to do
-            return
+        self.img = self._get_img( scl = scl, mode = mode )
+        window_name = mode + "_image"
 
-        if event == cv2.EVENT_MOUSEMOVE:
-            self.current = (x, y)
+        cv2.namedWindow( window_name )
+        cv2.setMouseCallback( window_name, self._mouse_get_pos_and_color )
 
-        elif event == cv2.EVENT_LBUTTONDOWN:
-            print( "Adding point #%d with position(%d,%d)" % ( len( self.points ), x, y ) )
-            self.points.append( (x, y) )
+        while True:
 
-        elif event == cv2.EVENT_RBUTTONDOWN:
-            print( "Completing polygon with %d points." % len(self.points))
-            self.done = True
+            self.img = self._get_img( scl = scl, mode = mode )
+            cv2.imshow( window_name, self.img )
+            k = cv2.waitKey( 1 )
+
 
     def mask_color( self, img, lower_bound, upper_bound ):
 
@@ -76,6 +101,143 @@ class Camera( object ):
         return img_masked
 
 
+    def detect_platform( self ):
+        # This is our drawing loop, we just continuously draw new images and show them in the named window
+        while True:
+
+            ( grabbed, img_raw ) = self.vid.read( )
+
+            if not grabbed: continue
+
+
+            # img_raw  = cv2.resize(   img_raw, ( 0,0 ), fx = self.scl, fy = self.scl )
+            img_raw  = cv2.resize(   img_raw, ( 0,0 ), fx = self.scl, fy = self.scl )
+
+            img_hsv  = cv2.cvtColor( img_raw, cv2.COLOR_BGR2HSV  )
+            gray     = cv2.cvtColor( img_raw, cv2.COLOR_BGR2GRAY )
+
+            # This is the rough upper/lower bound of the platform found via "get_color" method
+            dst = cv2.fastNlMeansDenoisingColored( img_hsv,None, 20,10,7,21 )
+
+            cv2.imshow( "denoised", dst )
+
+
+
+            img_filtered = cv2.inRange( dst, np.array( [100, 20, 40] ), np.array( [120, 90, 80] ))
+
+            kernel = cv2.getStructuringElement( cv2.MORPH_RECT, ( 5,5 ) )
+            morph  = cv2.morphologyEx( img_filtered, cv2.MORPH_DILATE, kernel )
+#
+            # kernel = cv2.getStructuringElement( cv2.MORPH_ELLIPSE, ( 9,9 ) )
+            # morph  = cv2.morphologyEx( morph, cv2.MORPH_OPEN , kernel )
+
+            #
+            kernel = cv2.getStructuringElement( cv2.MORPH_ELLIPSE, ( 9,9 ) )
+            morph  = cv2.morphologyEx( morph, cv2.MORPH_CLOSE , kernel )
+
+            kernel = cv2.getStructuringElement( cv2.MORPH_ELLIPSE, ( 15,15 ) )
+            morph  = cv2.morphologyEx( morph, cv2.MORPH_CLOSE , kernel)
+
+            kernel = cv2.getStructuringElement( cv2.MORPH_ELLIPSE, ( 19,19 ) )
+            morph  = cv2.morphologyEx( morph, cv2.MORPH_CLOSE , kernel )
+
+            kernel = cv2.getStructuringElement( cv2.MORPH_RECT, ( 19,19 ) )
+            morph  = cv2.morphologyEx( morph, cv2.MORPH_CLOSE , kernel )
+
+            contours, hierarchy = cv2.findContours( morph, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_TC89_L1 )
+            cv2.drawContours( img_raw, contours, -1, ( 0,255,0 ), 3 )
+
+            # [REF] https://www.tutorialspoint.com/opencv/opencv_adaptive_threshold.htm
+            # # thresh = cv2.adaptiveThreshold( gray, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY_INV, 21, 10)
+            # gray   = cv2.medianBlur( gray, 5 )
+            # thresh = cv2.adaptiveThreshold( gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 31, 10)
+            #
+            # cv2.imshow( "thresh" , thresh )
+
+            cv2.imshow( "filtered", img_filtered )
+            cv2.imshow( "filtered2", morph )
+            cv2.imshow( "contour", img_raw )
+            #
+            #
+            #     # [Step #3] Find the polygon for the fill
+            #     #           Before that, fill in the empty dots before drawing the contou
+
+
+            #
+            #
+            # contours, hierarchy = cv2.findContours( morph, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE )
+            # cv2.drawContours( img_raw, contours, -1, ( 0,255,0 ), 3 )
+            #
+            # cv2.imshow( "morph"  , morph   )
+            # cv2.imshow( "contour", img_raw )
+
+            # gray[ gray >= 220 ] = 0
+
+            # gray_blurred = cv2.medianBlur( gray, 5 )
+            # masked   = cv2.bitwise_and( gray, gray, mask = glare )
+
+
+
+
+            # print( np.unique( masked ) )
+            # canny = cv2.Canny( gray_blurred, 0, 120, 1 )
+            # cv2.imshow( "edge"  , canny )
+
+            # Dilation
+            # kernel     = np.ones( ( 30,30 ), np.uint8 )
+            # img_closed = cv2.morphologyEx( gray, cv2.MORPH_CLOSE, kernel)
+
+
+            # se = cv2.getStructuringElement( cv2.MORPH_RECT , (8,8) )
+            # gray = cv2.morphologyEx( gray, cv2.MORPH_DILATE, se)
+            #
+            # blurred = cv2.medianBlur(gray, 5)
+            # canny = cv2.Canny(blurred, 120, 255, 1)
+            #
+            # clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
+            # cl1 = clahe.apply( gray )
+
+            # cnts = cv2.findContours(canny, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            # cnts = cnts[0] if len(cnts) == 2 else cnts[1]
+            #
+            # # Iterate thorugh contours and draw rectangles around contours
+            # for c in cnts:
+            #     x,y,w,h = cv2.boundingRect(c)
+            #     cv2.rectangle( img_raw, (x, y), (x + w, y + h), (36,255,12), 2)
+
+            # cv2.imshow('img_raw'  , img_raw      )
+            # cv2.imshow('img_hsv'  , img_hsv      )
+            # cv2.imshow('img_gray' , cl1         )
+            # cv2.imshow('img_dil'  , img_closed )
+
+            # Usually, glares are near 255 values
+
+
+            # print( np.max( glare ) )
+            # Changin the values to
+
+
+            # cv2.imshow('image', img_raw)
+            #
+            #
+            # cv2.imshow( "test1", img_raw )
+            # # cv2.imshow( "test3", cl1 )              # https://docs.opencv.org/3.1.0/d5/daf/tutorial_py_histogram_equalization.html
+            # cv2.imshow( "maksed", masked  )
+            #
+            # cv2.imshow( "glare", glare    )
+
+
+            k = cv2.waitKey( 1 )
+
+            if k%256 == 27:         # ESC Pressed
+                print("Escape hit, closing...")
+                break
+            elif k == ord('a'):
+                cv2.imwrite( "tmp1.jpg", img_raw )
+                cv2.imwrite( "tmp2.jpg", thresh  )
+
+
+
     def draw_platform( self ):
 
         # Code for detecting the platform, either manually or via computer algorithm
@@ -86,7 +248,7 @@ class Camera( object ):
 
         self.done    = False        # Flag signalling we're done
         self.current = ( 0, 0 )     # Current position, so we can draw the line-in-progress
-        self.points  = []           # Empty List of points defining our polygon
+        self.points  = [ ]          # Empty List of points defining our polygon
 
         while( not self.done ):
             # This is our drawing loop, we just continuously draw new images and show them in the named window
@@ -211,6 +373,12 @@ if __name__ == "__main__":
 
     args   = parser.parse_args()
     my_cam = Camera( args )
+
+    # my_cam.detect_platform( )
+    my_cam._get_pos_and_color( mode = "rgb", scl = 0.8 )
+    exit( )
+
+
 
     if args.is_draw_platform:
         my_cam.draw_platform( )
