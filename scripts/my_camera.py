@@ -100,131 +100,69 @@ class Camera( object ):
 
         return img_masked
 
+    def find_polygons( self, img, n_edge ):
+
+        contours, _ = cv2.findContours( img, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE )
+
+        # [REF] https://docs.opencv.org/3.4/dc/dcf/tutorial_js_contour_features.html
+        # 2nd argument is the number of edges
+        poly_contour = []
+
+        for contour in contours:
+
+            # 2nd argument is to check whether the contour is closed or not, True if closed.
+            eps    = 0.1 * cv2.arcLength( contour, True )
+            approx = cv2.approxPolyDP( contour, eps, True )
+
+            # Only draw rectangles on the contour
+            if len( approx ) == n_edge:
+                poly_contour.append( approx )
+
+        return poly_contour
+
 
     def detect_platform( self ):
         # This is our drawing loop, we just continuously draw new images and show them in the named window
         while True:
 
-            ( grabbed, img_raw ) = self.vid.read( )
-
-            if not grabbed: continue
-
-
-            # img_raw  = cv2.resize(   img_raw, ( 0,0 ), fx = self.scl, fy = self.scl )
-            img_raw  = cv2.resize(   img_raw, ( 0,0 ), fx = self.scl, fy = self.scl )
-
+            img_raw  = self._get_img( scl = 0.5, mode = "rgb" )
             img_hsv  = cv2.cvtColor( img_raw, cv2.COLOR_BGR2HSV  )
             gray     = cv2.cvtColor( img_raw, cv2.COLOR_BGR2GRAY )
 
-            # This is the rough upper/lower bound of the platform found via "get_color" method
-            dst = cv2.fastNlMeansDenoisingColored( img_hsv,None, 20,10,7,21 )
+            # ======================================================================== #
+            # ======================== [STEP 1] DENOISE PROCESS ====================== #
+            # ======================================================================== #
+            # First the noise should be cleaned-up
+            img_denoised = cv2.fastNlMeansDenoisingColored( img_hsv, None, 20, 10, 7, 21 )                      # [REF] https://www.bogotobogo.com/python/OpenCV_Python/python_opencv3_Image_Non-local_Means_Denoising_Algorithm_Noise_Reduction.php
+            img_filtered = cv2.inRange( img_denoised, np.array( [100, 20, 40] ), np.array( [120, 90, 80] ) )    # The range was discovered manually _get_pos_and_color( ) method
 
-            cv2.imshow( "denoised", dst )
+            # If you want to check the denoised image, uncomment the following line
+            # cv2.imshow( "denoised_filtered", img_filtered )
 
+            # ======================================================================== #
+            # ======================== [STEP 2] MORPH PROCESS  ======================= #
+            # ======================================================================== #
+            kernel    = cv2.getStructuringElement( cv2.MORPH_ELLIPSE, ( 9, 9 ) )
+            img_morph = cv2.morphologyEx( img_filtered, cv2.MORPH_DILATE, kernel )      # DILATION is useful to take-off noises
+                                                                                        # [REF] https://docs.opencv.org/3.4/db/df6/tutorial_erosion_dilatation.html
+            # If you want to check out the image after morph process, uncomment the following line
+            # cv2.imshow( "morph", img_morph )
 
+            # ======================================================================== #
+            # ======================== [STEP 3] FIND CONTOURS  ======================= #
+            # ======================================================================== #
+            contour = self.find_polygons( img_morph, n_edge = 4 )           # Find 4 (rectangles) in the image
 
-            img_filtered = cv2.inRange( dst, np.array( [100, 20, 40] ), np.array( [120, 90, 80] ))
+            # Find the mazimum-size polygons within the contours
+            # max_contour = self.find_max_polygon( contour )
+            if contour:
 
-            kernel = cv2.getStructuringElement( cv2.MORPH_RECT, ( 5,5 ) )
-            morph  = cv2.morphologyEx( img_filtered, cv2.MORPH_DILATE, kernel )
-#
-            # kernel = cv2.getStructuringElement( cv2.MORPH_ELLIPSE, ( 9,9 ) )
-            # morph  = cv2.morphologyEx( morph, cv2.MORPH_OPEN , kernel )
+                sorted_contours = sorted( contour, key = cv2.contourArea, reverse = True)
+                max_contour = sorted_contours[ 0 ]
 
-            #
-            kernel = cv2.getStructuringElement( cv2.MORPH_ELLIPSE, ( 9,9 ) )
-            morph  = cv2.morphologyEx( morph, cv2.MORPH_CLOSE , kernel )
+                cv2.drawContours( img_raw, [ max_contour ] , -1, ( 0, 255, 0 ), 10 )
 
-            kernel = cv2.getStructuringElement( cv2.MORPH_ELLIPSE, ( 15,15 ) )
-            morph  = cv2.morphologyEx( morph, cv2.MORPH_CLOSE , kernel)
-
-            kernel = cv2.getStructuringElement( cv2.MORPH_ELLIPSE, ( 19,19 ) )
-            morph  = cv2.morphologyEx( morph, cv2.MORPH_CLOSE , kernel )
-
-            kernel = cv2.getStructuringElement( cv2.MORPH_RECT, ( 19,19 ) )
-            morph  = cv2.morphologyEx( morph, cv2.MORPH_CLOSE , kernel )
-
-            contours, hierarchy = cv2.findContours( morph, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_TC89_L1 )
-            cv2.drawContours( img_raw, contours, -1, ( 0,255,0 ), 3 )
-
-            # [REF] https://www.tutorialspoint.com/opencv/opencv_adaptive_threshold.htm
-            # # thresh = cv2.adaptiveThreshold( gray, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY_INV, 21, 10)
-            # gray   = cv2.medianBlur( gray, 5 )
-            # thresh = cv2.adaptiveThreshold( gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 31, 10)
-            #
-            # cv2.imshow( "thresh" , thresh )
-
-            cv2.imshow( "filtered", img_filtered )
-            cv2.imshow( "filtered2", morph )
-            cv2.imshow( "contour", img_raw )
-            #
-            #
-            #     # [Step #3] Find the polygon for the fill
-            #     #           Before that, fill in the empty dots before drawing the contou
-
-
-            #
-            #
-            # contours, hierarchy = cv2.findContours( morph, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE )
-            # cv2.drawContours( img_raw, contours, -1, ( 0,255,0 ), 3 )
-            #
-            # cv2.imshow( "morph"  , morph   )
-            # cv2.imshow( "contour", img_raw )
-
-            # gray[ gray >= 220 ] = 0
-
-            # gray_blurred = cv2.medianBlur( gray, 5 )
-            # masked   = cv2.bitwise_and( gray, gray, mask = glare )
-
-
-
-
-            # print( np.unique( masked ) )
-            # canny = cv2.Canny( gray_blurred, 0, 120, 1 )
-            # cv2.imshow( "edge"  , canny )
-
-            # Dilation
-            # kernel     = np.ones( ( 30,30 ), np.uint8 )
-            # img_closed = cv2.morphologyEx( gray, cv2.MORPH_CLOSE, kernel)
-
-
-            # se = cv2.getStructuringElement( cv2.MORPH_RECT , (8,8) )
-            # gray = cv2.morphologyEx( gray, cv2.MORPH_DILATE, se)
-            #
-            # blurred = cv2.medianBlur(gray, 5)
-            # canny = cv2.Canny(blurred, 120, 255, 1)
-            #
-            # clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
-            # cl1 = clahe.apply( gray )
-
-            # cnts = cv2.findContours(canny, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-            # cnts = cnts[0] if len(cnts) == 2 else cnts[1]
-            #
-            # # Iterate thorugh contours and draw rectangles around contours
-            # for c in cnts:
-            #     x,y,w,h = cv2.boundingRect(c)
-            #     cv2.rectangle( img_raw, (x, y), (x + w, y + h), (36,255,12), 2)
-
-            # cv2.imshow('img_raw'  , img_raw      )
-            # cv2.imshow('img_hsv'  , img_hsv      )
-            # cv2.imshow('img_gray' , cl1         )
-            # cv2.imshow('img_dil'  , img_closed )
-
-            # Usually, glares are near 255 values
-
-
-            # print( np.max( glare ) )
-            # Changin the values to
-
-
-            # cv2.imshow('image', img_raw)
-            #
-            #
-            # cv2.imshow( "test1", img_raw )
-            # # cv2.imshow( "test3", cl1 )              # https://docs.opencv.org/3.1.0/d5/daf/tutorial_py_histogram_equalization.html
-            # cv2.imshow( "maksed", masked  )
-            #
-            # cv2.imshow( "glare", glare    )
+            cv2.imshow( "img_contoured", img_raw )
 
 
             k = cv2.waitKey( 1 )
@@ -374,8 +312,9 @@ if __name__ == "__main__":
     args   = parser.parse_args()
     my_cam = Camera( args )
 
-    # my_cam.detect_platform( )
-    my_cam._get_pos_and_color( mode = "rgb", scl = 0.8 )
+
+    # my_cam._get_pos_and_color( mode = "rgb", scl = 0.8 )
+    my_cam.detect_platform( )
     exit( )
 
 
