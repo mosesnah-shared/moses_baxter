@@ -106,7 +106,7 @@ class Camera( object ):
 
         # [REF] https://docs.opencv.org/3.4/dc/dcf/tutorial_js_contour_features.html
         # 2nd argument is the number of edges
-        poly_contour = []
+        poly_contour = [ ]
 
         for contour in contours:
 
@@ -121,7 +121,15 @@ class Camera( object ):
         return poly_contour
 
 
-    def detect_platform( self ):
+    def detect_platform( self, mode = "debug" ):
+
+        assert mode in [ "debug", "detect" ]
+
+        # If mode is debug, simply run the loop forever
+        # If mode is detect, sample and retrieve the average points of the platform
+        tmp = []
+
+
         # This is our drawing loop, we just continuously draw new images and show them in the named window
         while True:
 
@@ -157,25 +165,25 @@ class Camera( object ):
             # max_contour = self.find_max_polygon( contour )
             if contour:
 
+                # Find the contour with maximum area
                 sorted_contours = sorted( contour, key = cv2.contourArea, reverse = True)
                 max_contour = sorted_contours[ 0 ]
-
+                tmp.append( np.squeeze( max_contour ) )
                 cv2.drawContours( img_raw, [ max_contour ] , -1, ( 0, 255, 0 ), 10 )
+
 
             cv2.imshow( "img_contoured", img_raw )
 
+            if mode == "detect" and len( tmp ) > 10:
+
+                platform_points = np.around( np.median( tmp, 0 ) )
+                print( "platform points are as follows:", platform_points )
+
+                return platform_points
 
             k = cv2.waitKey( 1 )
 
-            if k%256 == 27:         # ESC Pressed
-                print("Escape hit, closing...")
-                break
-            elif k == ord('a'):
-                cv2.imwrite( "tmp1.jpg", img_raw )
-                cv2.imwrite( "tmp2.jpg", thresh  )
-
-
-
+    # [2022.03.10] This code can be taken off since it is like a legacy code
     def draw_platform( self ):
 
         # Code for detecting the platform, either manually or via computer algorithm
@@ -216,7 +224,10 @@ class Camera( object ):
         k = cv2.waitKey( 0 )                    # Wait for 1ms and get the key input
 
 
-    def run( self, platform_points = ( ( 342,130 ), ( 325, 351 ), ( 642, 335 ), ( 585, 118 )  ) ):
+    def run( self ):
+
+        platform_points = self.detect_platform( mode = "detect" )
+        print( platform_points )
 
         try:
             while True:
@@ -311,20 +322,4 @@ if __name__ == "__main__":
 
     args   = parser.parse_args()
     my_cam = Camera( args )
-
-
-    # my_cam._get_pos_and_color( mode = "rgb", scl = 0.8 )
-    my_cam.detect_platform( )
-    exit( )
-
-
-
-    if args.is_draw_platform:
-        my_cam.draw_platform( )
-
-    else:
-
-        points = [ (409, 164), (401, 367), (673, 358), (625, 166) ]
-
-        # points =  [(337, 167), (318, 368), (603, 363), (563, 164)]
-        my_cam.run( platform_points = points )
+    my_cam.run(  )
