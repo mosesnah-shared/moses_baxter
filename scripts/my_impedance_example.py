@@ -366,9 +366,9 @@ def main():
 
         # The upper and lower bound of the parameters of Baxter
         # D1, s1, e1, w1
-        lb    = np.array( [ 0.5, -0.7, 0.3, -0.7] )
-        ub    = np.array( [ 3.0,  0.3, 1.2,  1.0] )
-        n_opt = 4
+        lb    = np.array( [ -0.7, 0.5, -1.3, 0.2, 0.2, 0.0 ] )
+        ub    = np.array( [  0.2, 1.5,  1.3, 1.6, 1.6, 1.0 ] )
+        n_opt = 6
 
         algorithm = idx_opt[ idx ]                                              # Selecting the algorithm to be executed
         opt       = nlopt.opt( algorithm, n_opt )                               # Defining the class for optimization
@@ -396,19 +396,20 @@ def main():
             # [STEP #1] Move to initial posture
 
             # [STEP #2] Initiate movement
-            pose = my_baxter.tmp_pose_gen( pars[ 1: ] )
+            pose = my_baxter.tmp_pose_gen( pars[ 0:3 ] )
 
-            my_baxter.joint_impedance(  C.BOTH, [ C.GRASP_POSE, pose  ] , Ds = [ pars[ 0 ] ], toffs = 3  )
+            print( "[Iteration] ", opt.get_numevals( ) , " [parameters] ", pars, end = '' )
+
+            my_baxter.joint_impedance(  C.BOTH, [ C.GRASP_POSE, pose , C.FINAL_POSE ] , Ds = [ pars[ 3 ], pars[ 4 ] ], toffs = [ pars[ 5 ], 5 ]  )
 
 
             # Get Baxter's tablecloth performance
             obj = rospy.get_param( 'my_obj_func' )
 
-
             if obj >= tmp_t:
                 obj = 100.0
 
-            print( "[Iteration] ", opt.get_numevals( ) , " [Duration] ", pars, " [obj] ", obj )
+            print( " [obj] ", obj )
 
             my_baxter.joint_impedance(  C.BOTH, [ pose, C.LIFT_POSE   ], Ds = 5, toffs = [1]  )
             my_baxter.joint_impedance(  C.BOTH, [ C.LIFT_POSE , C.GRASP_POSE  ], Ds = 5, toffs = [3]  )
@@ -430,18 +431,18 @@ def main():
         # [Step #1] Setting the gripper
         # ==================================================================================================== #
 
-        my_baxter.move2pose( C.RIGHT, C.GRASP_POSE, wait_time = 2, joint_speed = 0.2 )
-        my_baxter.move2pose( C.LEFT,  C.GRASP_POSE, wait_time = 2, joint_speed = 0.2 )
+        my_baxter.move2pose( C.RIGHT, C.FINAL_POSE, wait_time = 2, joint_speed = 0.2 )
+        my_baxter.move2pose( C.LEFT,  C.FINAL_POSE, wait_time = 2, joint_speed = 0.2 )
 
-        my_baxter.control_gripper( mode = "timer" )
+        # my_baxter.control_gripper( mode = "timer" )
 
         # ==================================================================================================== #
         # [Step #2] Initiate the movement
         # ==================================================================================================== #
 
-        rospy.sleep( 3 )
+        rospy.sleep( 10 )
 
-        my_baxter.joint_impedance(  C.BOTH, [ C.GRASP_POSE, C.MID_POSE, C.FINAL_POSE  ] , Ds = [1.0, 1.0], toffs = [0.1, 2.0]  )
+        # my_baxter.joint_impedance(  C.BOTH, [ C.GRASP_POSE, C.MID_POSE, C.FINAL_POSE  ] , Ds = [1.0, 1.0], toffs = [0.1, 2.0]  )
 
         # my_baxter.joint_impedance(  C.BOTH, [ C.GRASP_POSE, C.LIFT_POSE   ], Ds = 5, toffs = [1]  )
         # my_baxter.joint_impedance(  C.BOTH, [ C.LIFT_POSE , C.GRASP_POSE  ], Ds = 5, toffs = [1]  )

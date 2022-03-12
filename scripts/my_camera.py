@@ -22,8 +22,6 @@ class Camera( object ):
         self.vid  = cv2.VideoCapture( 0 )   # Turn on webcam
         self.img  = None                    # The current image of the main window that we often refer to
 
-        if args.calibrated:     # [2022.03.10] We can calibrate the camera to take off the fish-bowl distortion effect.
-            NotImplementedError( )
             # [Moses C. Nah] [BACKUP]
             # We've checked that calibration is not required yet
             # f_name = "cam_vars.pkl"
@@ -43,26 +41,29 @@ class Camera( object ):
             #     # frame       = undistorted_image[y:y+h, x:x+w]                           # Rewriting the frame
             #     cv2.imshow('frame', undistorted_image)                                    # Display the resulting frame
 
-    def _get_img( self, scl = 0.5, mode = "hsv" ):
+    def _get_img( self, scl = 0.5, styles = [ "hsv" ] ):
 
-        assert mode in [ "rgb", "hsv", "gray" ]
+        assert isinstance( styles, list )
+        assert set( styles ) <= set( [ "rgb", "hsv", "gray" ] )                 # Styles should be a subset of the list
 
-        grabbed = False
+        ( _, img ) = self.vid.read( )
 
-        if not grabbed:
-            ( grabbed, img ) = self.vid.read( )
+        img_list = []
+        img      = cv2.resize( img, ( 0,0 ), fx = scl, fy = scl )
 
-        img = cv2.resize( img, ( 0,0 ), fx = scl, fy = scl )
+        for style in styles:
+            if   style == "gray":
+                img = cv2.cvtColor( img, cv2.COLOR_BGR2GRAY )
 
-        if   mode == "gray":
-            img = cv2.cvtColor( img, cv2.COLOR_BGR2GRAY )
+            elif style == "hsv":
+                img = cv2.cvtColor( img, cv2.COLOR_BGR2HSV  )
 
-        elif mode == "hsv":
-            img = cv2.cvtColor( img, cv2.COLOR_BGR2HSV  )
+            img_list.append( img )
 
-        # If rgb, then do nothing
+        if len( img_list ) == 1:
+            img_list = img_list[ 0 ]
 
-        return img
+        return img_list
 
     def _mouse_get_pos_and_color( self, event, x, y, buttons, pars ):
 
@@ -72,33 +73,21 @@ class Camera( object ):
     def _get_img_size( self, img ):
         return ( img.shape[ : 2 ] )
 
-    def _get_pos_and_color( self, mode = "hsv", scl = 0.5 ):
+    def _get_pos_and_color( self, style = [ "hsv" ], scl = 0.5 ):
 
-        self.img = self._get_img( scl = scl, mode = mode )
-        window_name = mode + "_image"
+        assert len( style ) == 1
+
+        self.img = self._get_img( scl = scl, styles = style )
+        window_name = style[ 0 ] + "_image"
 
         cv2.namedWindow( window_name )
         cv2.setMouseCallback( window_name, self._mouse_get_pos_and_color )
 
         while True:
-
-            self.img = self._get_img( scl = scl, mode = mode )
+            self.img = self._get_img( scl = scl, styles = style )
             cv2.imshow( window_name, self.img )
             k = cv2.waitKey( 1 )
 
-
-    def mask_color( self, img, lower_bound, upper_bound ):
-
-        hsv = cv2.cvtColor( img, cv2.COLOR_BGR2HSV )
-
-        lb = np.array( lower_bound )
-        ub = np.array( upper_bound )
-
-        mask       = cv2.inRange( hsv, lb, ub )                                 # Return the img in 0 or 255, which is simply a boolean
-        img_masked = cv2.bitwise_and( img, img, mask = mask )                   # Simply masking and letting the "masked color" outputs in the frame
-                                                                                # If the mask element is nonzero,
-
-        return img_masked
 
     def find_polygons( self, img, n_edge ):
 
@@ -133,19 +122,19 @@ class Camera( object ):
         # This is our drawing loop, we just continuously draw new images and show them in the named window
         while True:
 
-            img_raw  = self._get_img( scl = 0.5, mode = "rgb" )
-            img_hsv  = cv2.cvtColor( img_raw, cv2.COLOR_BGR2HSV  )
-            gray     = cv2.cvtColor( img_raw, cv2.COLOR_BGR2GRAY )
+            img_raw, img_hsv, gray  = self._get_img( scl = 0.5, styles = [ "rgb", "hsv", "gray" ] )
+
+            cv2.imshow( "raw", img_raw )
 
             # ======================================================================== #
             # ======================== [STEP 1] DENOISE PROCESS ====================== #
             # ======================================================================== #
             # First the noise should be cleaned-up
             img_denoised = cv2.fastNlMeansDenoisingColored( img_hsv, None, 20, 10, 7, 21 )                      # [REF] https://www.bogotobogo.com/python/OpenCV_Python/python_opencv3_Image_Non-local_Means_Denoising_Algorithm_Noise_Reduction.php
-            img_filtered = cv2.inRange( img_denoised, np.array( [100, 20, 40] ), np.array( [120, 90, 80] ) )    # The range was discovered manually _get_pos_and_color( ) method
+            img_filtered = cv2.inRange( img_denoised, np.array( [100, 20, 40] ), np.array( [120, 120, 90] ) )    # The range was discovered manually _get_pos_and_color( ) method
 
             # If you want to check the denoised image, uncomment the following line
-            # cv2.imshow( "denoised_filtered", img_filtered )
+            cv2.imshow( "denoised_filtered", img_filtered )
 
             # ======================================================================== #
             # ======================== [STEP 2] MORPH PROCESS  ======================= #
@@ -154,12 +143,14 @@ class Camera( object ):
             img_morph = cv2.morphologyEx( img_filtered, cv2.MORPH_DILATE, kernel )      # DILATION is useful to take-off noises
                                                                                         # [REF] https://docs.opencv.org/3.4/db/df6/tutorial_erosion_dilatation.html
             # If you want to check out the image after morph process, uncomment the following line
-            # cv2.imshow( "morph", img_morph )
+            cv2.imshow( "morph", img_morph )
 
             # ======================================================================== #
             # ======================== [STEP 3] FIND CONTOURS  ======================= #
             # ======================================================================== #
             contour = self.find_polygons( img_morph, n_edge = 4 )           # Find 4 (rectangles) in the image
+
+
 
             # Find the mazimum-size polygons within the contours
             # max_contour = self.find_max_polygon( contour )
@@ -174,14 +165,34 @@ class Camera( object ):
 
             cv2.imshow( "img_contoured", img_raw )
 
-            if mode == "detect" and len( tmp ) > 10:
+            if mode == "detect" and len( tmp ) > 11:
 
                 platform_points = np.around( np.median( tmp, 0 ) )
                 print( "platform points are as follows:", platform_points )
 
-                return platform_points
+                return np.int32( platform_points )
 
             k = cv2.waitKey( 1 )
+
+    def calc_covered( self, img_platform, img_covered ):
+
+        # Find points with 1 ( ==255 )
+        tmp1 = ( img_platform == 255 )
+        tmp2 = ( img_covered  == 255 )
+
+        tmp_overlap = np.logical_and( tmp1, tmp2 )
+
+        # By default the image is converted to blue
+        h, w = self._get_img_size( img_platform )
+        img_overlap = np.zeros( ( h, w , 3), dtype=np.uint8 )
+        img_overlap[ tmp_overlap  ] = [ 255, 0, 0 ]
+
+        N  = np.sum( tmp1        )
+        N1 = np.sum( tmp_overlap )
+
+        cov_val = float( N1 / N * 100 )
+
+        return cov_val, img_overlap
 
     # [2022.03.10] This code can be taken off since it is like a legacy code
     def draw_platform( self ):
@@ -203,7 +214,7 @@ class Camera( object ):
             if not grabbed: continue
 
             img_platform = cv2.resize(   img_platform, ( 0,0 ), fx = self.scl, fy = self.scl )
-            self.img_h, self.img_w = self.get_img_size( img_platform )
+            h, w = self._get_img_size( img_platform )
 
             if ( len( self.points ) > 0 ):
                 cv2.polylines( img_platform, np.array( [self.points] ), False, FINAL_LINE_COLOR, 6)     # Draw all the current polygon segments
@@ -224,85 +235,87 @@ class Camera( object ):
         k = cv2.waitKey( 0 )                    # Wait for 1ms and get the key input
 
 
-    def run( self ):
+    def run( self, platform_points = None, color = "yellow" ):
 
-        platform_points = self.detect_platform( mode = "detect" )
-        print( platform_points )
+        if platform_points is None:
+            platform_points = self.detect_platform( mode = "detect" )
+
+        # [Step #0] Platform Table
+        img_raw      = self._get_img( scl = 0.5, styles = [ "rgb" ] )
+        h, w         = self._get_img_size( img_raw )
+        img_platform = np.zeros( ( h, w ), np.uint8 )
+
+
+        cv2.fillPoly( img_platform, [ platform_points ], ( 255, 0, 0 ) )
+        cv2.imshow( "platform", img_platform )
+
+
+        if   color == "yellow":
+            COLOR_LOWER_BOUND_YELLOW = np.array( [  0,  80,   0 ] )
+            COLOR_UPPER_BOUND_YELLOW = np.array( [ 45, 255, 255 ] )
+
+        elif color == "green":
+            COLOR_LOWER_BOUND_GREEN  = np.array( [ 100, 150,  30 ] )
+            COLOR_UPPER_BOUND_GREEN  = np.array( [ 120, 180, 200 ] )
 
         try:
             while True:
 
-                ( grabbed, img_raw ) = self.vid.read( )                         # Capture the video frame-by-frame
-                if not grabbed: continue
+                if color == "yellow":
+                    # If frame grabbed, then continue.
+                    img_raw, img_hsv   = self._get_img( scl = 0.5, styles = [ "rgb", "hsv" ] )
 
-                # If frame grabbed, then continue
-                img_raw = cv2.resize(   img_raw, ( 0,0 ), fx = self.scl, fy = self.scl )
-                img_yellow_contour = img_raw.copy( )
+                    # [Step #1] Masking out the lower and upper bound of the
+                    mask       = cv2.inRange( img_hsv, COLOR_LOWER_BOUND_YELLOW, COLOR_UPPER_BOUND_YELLOW )
+                    img_masked = cv2.bitwise_and( img_raw, img_raw, mask = mask )
+                    cv2.imshow( color + "_masked", img_masked )
 
+                    # # [Step #2] Changing again the figure to gray scale and thresholding to clean up
+                    img_tmp = cv2.cvtColor( img_masked, cv2.COLOR_BGR2GRAY )
+                    thresh  = cv2.threshold( img_tmp, 100, 255, cv2.THRESH_BINARY )[ 1 ]  # threshold
 
-                self.img_h, self.img_w = self.get_img_size( img_raw )
-                img_platform_masked    = np.zeros( ( self.img_h, self.img_w ) , np.uint8 )
+                    # [Step #3] Find the polygon for the fill
+                    #           Before that, fill in the empty dots before drawing the contou
+                    kernel = cv2.getStructuringElement( cv2.MORPH_ELLIPSE, ( 35,35 ) )
+                    morph  = cv2.morphologyEx( thresh, cv2.MORPH_CLOSE, kernel )
+                    #
+                    contours, hierarchy = cv2.findContours( thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE )
+                    cv2.drawContours( img_raw, contours, -1, ( 0,255,0 ), 3 )
 
-                if ( len( platform_points ) > 0):
-                    cv2.fillPoly( img_platform_masked, np.array( [ platform_points ] ), ( 255, 0, 0 ) )
+                elif color == "green":
 
-                # [Step #1] Masking out the lower and upper bound of the yellow
-                # img_masked = self.mask_color( img_raw, C.COLOR_LOWER_BOUND_YELLOW, C.COLOR_UPPER_BOUND_YELLOW )
-                img_masked = self.mask_color( img_raw, C.COLOR_LOWER_BOUND_YELLOW, C.COLOR_UPPER_BOUND_YELLOW )
+                    # If frame grabbed, then continue.
+                    img_raw, img_hsv   = self._get_img( scl = 0.5, styles = [ "rgb", "hsv" ] )
+                    # cv2.imshow( "img_raw", img_raw )
 
-                # [Step #2] Changing again the figure to gray scale and thresholding to clean up
-                img_tmp = cv2.cvtColor( img_masked, cv2.COLOR_BGR2GRAY )
-                thresh  = cv2.threshold( img_tmp, 100, 255, cv2.THRESH_BINARY)[ 1 ]  # threshold
+                    # [Step #1] Masking out the lower and upper bound of the
+                    img_mask    = cv2.inRange( img_hsv, COLOR_LOWER_BOUND_GREEN, COLOR_UPPER_BOUND_GREEN )
+                    img_blurred = cv2.GaussianBlur( img_mask, ( 35,35 ), 0 )
 
-                # [Step #3] Find the polygon for the fill
-                #           Before that, fill in the empty dots before drawing the contou
-                kernel = cv2.getStructuringElement( cv2.MORPH_ELLIPSE, ( 35,35 ) )
-                morph  = cv2.morphologyEx( thresh, cv2.MORPH_CLOSE, kernel )
+                    thresh      = cv2.threshold( img_blurred, 100, 255, cv2.THRESH_BINARY)[ 1 ]  # threshold
+                    # cv2.imshow( "thresh", thresh )
 
-                contours, hierarchy = cv2.findContours( thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE )
-                cv2.drawContours( img_yellow_contour, contours, -1, ( 0,255,0 ), 3 )
-
-                size_elements = 0
-                for cnt in contours:
-                    size_elements += cv2.contourArea( cnt )
+                    # [Step #3] Find the polygon for the fill
+                    #           Before that, fill in the empty dots before drawing the contou
+                    kernel = cv2.getStructuringElement( cv2.MORPH_ELLIPSE, ( 35, 35 ) )
+                    morph  = cv2.morphologyEx( thresh, cv2.MORPH_CLOSE, kernel )
+                    #
+                    # cv2.imshow( "morph", morph )
+                    contours, hierarchy = cv2.findContours( morph, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE )
+                    cv2.drawContours( img_raw, contours, -1, ( 0, 255, 0 ), 3 )
 
                 # [Step #4] Fill the polygon
-                img_filled = cv2.fillPoly( np.zeros( ( self.img_h, self.img_w ) ), pts = contours, color = ( 255, 255, 255 ) )
+                img_filled = cv2.fillPoly( np.zeros( ( h, w ) ), pts = contours, color = 255 )
 
                 # [Step #5] Draw all the images
-                cv2.imshow( "main"           , img_raw            )
-                # cv2.imshow( "yellow_masked"  , img_masked         )
-                cv2.imshow( "yellow_contour" , img_yellow_contour )
+                covered_part, img_covered = self.calc_covered( img_platform, img_filled )
 
+                img_merged = cv2.addWeighted( img_covered, 0.7, img_raw, 0.3 , 0 )
+                cv2.imshow( "img_total" , img_merged )
+                print("rate of fullness : % ", covered_part )
 
-                tmp1 = ( img_platform_masked == 255 )
-                tmp2 = (          img_filled == 255 )
-
-                tmp_overlap = np.logical_and( tmp1, tmp2 )
-
-                over_lap = 255 * tmp_overlap.astype( np.uint8 )
-                over_lap = cv2.cvtColor( over_lap, cv2.COLOR_GRAY2RGB )
-
-                b, g, r = cv2.split( over_lap )
-
-                zeros_ch = np.zeros( ( self.img_h, self.img_w ), dtype="uint8")
-                blue_img = cv2.merge( [b, zeros_ch, zeros_ch] )
-                # cv2.imshow("Blue Image", blue_img)
-                tmpt = cv2.addWeighted( blue_img, 0.7, img_raw, 0.3, 0)
-
-                cv2.imshow( "filled2"        , tmpt        )
-
-                N  = np.sum( tmp1  )
-                N1 = np.sum( np.logical_and( tmp1, tmp2  ) )
-
-                cov_val = float( N1/N * 100 )
-
-                print("rate of fullness : % ", cov_val )
-                rospy.set_param( 'my_obj_func', cov_val )
-
-
+                rospy.set_param( 'my_obj_func', covered_part )
                 k = cv2.waitKey( 1 )                    # Wait for 1ms and get the key input
-
 
         except KeyboardInterrupt:
             print( 'interrupted via Ctrl-c, halting' )
@@ -311,15 +324,17 @@ class Camera( object ):
             cv2.destroyAllWindows()
 
 
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
-    parser.add_argument("-c", "--calibrated",         help = "turn on calibration"                     , action = 'store_true')
-    parser.add_argument("-s", "--is_draw_platform"  , help = "mouse run to draw the target platform" , action = 'store_true')
-    parser.add_argument(      "--scale"             , help = "The scale of the whole image"            , type = float, default = 0.4)
-
+    parser.add_argument("-d", "--detect_platform"   , help = "detect the target platform platform" , action = 'store_true')
 
     args   = parser.parse_args()
     my_cam = Camera( args )
-    my_cam.run(  )
+
+    if args.detect_platform:
+        my_cam.detect_platform( mode = "detect" )
+        exit( )
+
+    # my_cam._get_pos_and_color( )
+    my_cam.run( platform_points = np.array( [ [ 745, 199], [ 445, 204], [434, 498], [808, 478] ] ), color = "green"  )
