@@ -255,7 +255,7 @@ class Camera( object ):
             COLOR_UPPER_BOUND_YELLOW = np.array( [ 45, 255, 255 ] )
 
         elif color == "green":
-            COLOR_LOWER_BOUND_GREEN  = np.array( [ 100, 150,  30 ] )
+            COLOR_LOWER_BOUND_GREEN  = np.array( [ 100, 120, 100 ] )
             COLOR_UPPER_BOUND_GREEN  = np.array( [ 120, 180, 200 ] )
 
         try:
@@ -328,6 +328,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
     parser.add_argument("-d", "--detect_platform"   , help = "detect the target platform platform" , action = 'store_true')
+    parser.add_argument("-g", "--debug"             , help = "debug the image" , action = 'store_true')
 
     args   = parser.parse_args()
     my_cam = Camera( args )
@@ -336,5 +337,8 @@ if __name__ == "__main__":
         my_cam.detect_platform( mode = "detect" )
         exit( )
 
-    # my_cam._get_pos_and_color( )
-    my_cam.run( platform_points = np.array( [ [ 745, 199], [ 445, 204], [434, 498], [808, 478] ] ), color = "green"  )
+    elif args.debug:
+        my_cam._get_pos_and_color( )
+        exit( )
+
+    my_cam.run( platform_points = np.array( [ [731, 169], [439, 175], [429, 456], [798, 432] ]    ), color = "green"  )

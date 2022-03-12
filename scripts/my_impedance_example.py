@@ -23,7 +23,7 @@ from sensor_msgs.msg              import JointState
 
 # Local Library, under moses/scripts
 from my_constants import Constants as C
-from my_utils     import GripperConnect #Logger,
+from my_utils     import GripperConnect, Logger
 
 # Local Library, customized messages
 from moses_baxter.msg import my_msg
@@ -356,6 +356,9 @@ def main():
 
     if args.is_run_optimization:
 
+        my_log = Logger( record_data = True)
+
+
         # Find the input parameters (input_pars) that are aimed to be optimized
         # Possible options (written in integer values) are as follows
         # [REF] https://nlopt.readthedocs.io/en/latest/NLopt_Algorithms/
@@ -375,7 +378,7 @@ def main():
 
         opt.set_lower_bounds( lb )
         opt.set_upper_bounds( ub )
-        opt.set_maxeval( 70 )
+        opt.set_maxeval( 100 )
 
         init = ( lb + ub ) * 0.5 + 0.05 * lb                                    # Setting an arbitrary non-zero initial step
 
@@ -384,7 +387,7 @@ def main():
         # #
         my_baxter.control_gripper( mode = "timer" )
 
-        tmp_t = 95 # If the coverage is higher than this value, simply set it as 100 and stop optimizaiton
+        tmp_t = 98 # If the coverage is higher than this value, simply set it as 100 and stop optimizaiton
 
         input( "Ready for optimization, press any key to continue" )
 
@@ -398,7 +401,7 @@ def main():
             # [STEP #2] Initiate movement
             pose = my_baxter.tmp_pose_gen( pars[ 0:3 ] )
 
-            print( "[Iteration] ", opt.get_numevals( ) , " [parameters] ", pars, end = '' )
+            my_log.write( "[Iteration] " + str( opt.get_numevals( ) ) + " [parameters] " + str( pars ) )
 
             my_baxter.joint_impedance(  C.BOTH, [ C.GRASP_POSE, pose , C.FINAL_POSE ] , Ds = [ pars[ 3 ], pars[ 4 ] ], toffs = [ pars[ 5 ], 5 ]  )
 
@@ -409,15 +412,15 @@ def main():
             if obj >= tmp_t:
                 obj = 100.0
 
-            print( " [obj] ", obj )
+            my_log.write( " [obj] " + str( obj ) + "\n" )
 
-            my_baxter.joint_impedance(  C.BOTH, [ pose, C.LIFT_POSE   ], Ds = 5, toffs = [1]  )
+            my_baxter.joint_impedance(  C.BOTH, [ C.FINAL_POSE, C.LIFT_POSE   ], Ds = 5, toffs = [1]  )
             my_baxter.joint_impedance(  C.BOTH, [ C.LIFT_POSE , C.GRASP_POSE  ], Ds = 5, toffs = [3]  )
 
             return 100.0 - obj # Inverting the value
 
         opt.set_min_objective( nlopt_objective )
-        opt.set_stopval( 1e-6    )                                              # If value is within 98~100% (i.e., 0~2%)
+        opt.set_stopval( -1    )                                                # If value is within 98~100% (i.e., 0~2%)
         xopt = opt.optimize( init )                                             # Start at the mid-point of the lower and upper bound
 
     # ============================================================================= #
@@ -431,9 +434,19 @@ def main():
         # [Step #1] Setting the gripper
         # ==================================================================================================== #
 
-        my_baxter.move2pose( C.RIGHT, C.FINAL_POSE, wait_time = 2, joint_speed = 0.2 )
-        my_baxter.move2pose( C.LEFT,  C.FINAL_POSE, wait_time = 2, joint_speed = 0.2 )
+        my_baxter.move2pose( C.RIGHT, C.GRASP_POSE, wait_time = 2, joint_speed = 0.2 )
+        my_baxter.move2pose( C.LEFT,  C.GRASP_POSE, wait_time = 2, joint_speed = 0.2 )
 
+        opt_pars = [ -0.55, 0.66666667, 0.0, 0.9, 0.9, 0.5]
+        pose = my_baxter.tmp_pose_gen( opt_pars[ 0:3 ] )
+
+        my_baxter.control_gripper( mode = "timer" )
+
+
+        input( "Ready for optimization, press any key to continue" )
+
+
+        my_baxter.joint_impedance(  C.BOTH, [ C.GRASP_POSE, pose , C.FINAL_POSE ] , Ds = [ opt_pars[ 3 ], opt_pars[ 4 ] ], toffs = [ opt_pars[ 5 ], 8 ]  )
         # my_baxter.control_gripper( mode = "timer" )
 
         # ==================================================================================================== #
