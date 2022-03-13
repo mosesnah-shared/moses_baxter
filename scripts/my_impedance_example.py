@@ -369,7 +369,7 @@ def main():
 
         # The upper and lower bound of the parameters of Baxter
         # D1, s1, e1, w1
-        lb    = np.array( [ -0.7, 0.5, -1.3, 0.2, 0.2, 0.0 ] )
+        lb    = np.array( [ -0.7, 0.5, -1.3, 0.3, 0.3, 0.0 ] )
         ub    = np.array( [  0.2, 1.5,  1.3, 1.6, 1.6, 1.0 ] )
         n_opt = 6
 
@@ -378,7 +378,7 @@ def main():
 
         opt.set_lower_bounds( lb )
         opt.set_upper_bounds( ub )
-        opt.set_maxeval( 100 )
+        opt.set_maxeval( 130 )
 
         init = ( lb + ub ) * 0.5 + 0.05 * lb                                    # Setting an arbitrary non-zero initial step
 
@@ -437,7 +437,7 @@ def main():
         my_baxter.move2pose( C.RIGHT, C.GRASP_POSE, wait_time = 2, joint_speed = 0.2 )
         my_baxter.move2pose( C.LEFT,  C.GRASP_POSE, wait_time = 2, joint_speed = 0.2 )
 
-        opt_pars = [ -0.55, 0.66666667, 0.0, 0.9, 0.9, 0.5]
+        opt_pars = [-0.55, 0.66666667, -0.86666667, 1.38333333, 0.95, 0.5 ]
         pose = my_baxter.tmp_pose_gen( opt_pars[ 0:3 ] )
 
         my_baxter.control_gripper( mode = "timer" )
