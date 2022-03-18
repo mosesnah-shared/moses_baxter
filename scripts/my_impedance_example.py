@@ -437,7 +437,7 @@ def main():
         my_baxter.move2pose( C.RIGHT, C.GRASP_POSE, wait_time = 2, joint_speed = 0.2 )
         my_baxter.move2pose( C.LEFT,  C.GRASP_POSE, wait_time = 2, joint_speed = 0.2 )
 
-        opt_pars = [-0.55, 0.66666667, -0.86666667, 1.38333333, 0.95, 0.5 ]
+        opt_pars = [-0.55, 1., -1.15555556, 0.9, 0.9, 0.5]
         pose = my_baxter.tmp_pose_gen( opt_pars[ 0:3 ] )
 
         my_baxter.control_gripper( mode = "timer" )
