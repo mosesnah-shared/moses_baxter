@@ -29,7 +29,12 @@ from my_utils     import GripperConnect, Logger
 from moses_baxter.msg import my_msg
 
 class JointImpedanceControl( object ):
-    def __init__( self, args ):#, reconfig_server):
+
+    # ================================================================ #
+    # ======================== INIT  FUNCTIONS ======================= #
+    # ================================================================ #
+
+    def __init__( self, args ):
 
         self.args         = args
         self.publish_data = args.publish_data     # Boolean, data saved
@@ -71,6 +76,45 @@ class JointImpedanceControl( object ):
 
         self.robot_init( )
 
+
+    def robot_init( self ):
+        print( "[LOG] [INIT IN PROGRESS] ....." )
+
+        self.rs         = baxter_interface.RobotEnable( CHECK_VERSION )         # Getting Robot State
+        self.init_state = self.rs.state().enabled                               # Enabling Robot
+
+        # Initializing the gripper
+        # [Moses C. Nah] You need to separately save the output to use the grippers
+        #                Hence, adding this seemingly-redundant Code
+        self.grip_ctrls = [ GripperConnect( arm ) for arm in C.LIMB_NAMES ]
+
+        # [BACKUP] When you want to control the grippers
+        # Check whether the gripper is opened (100) or closed( 0 )
+        # threshold value is simply 50
+
+        self.open_gripper( )
+        self.rs.enable()
+
+        print( "[LOG] [INIT COMPLETE] Ctrl-c to quit" )
+
+
+    def clean_shutdown( self ):
+
+        print( "[LOG] [SHUTTING DOWN ROBOT]" )
+
+        for i in range( 2 ):
+            self.arms[ i ].exit_control_mode( )
+
+        if not self.init_state and self.rs.state().enabled:
+
+            self.msg.on = False
+            self.pub.publish( self.msg )
+            self.rs.disable()
+
+    # ---------------------------------------------------------------- #
+    # ------------------------ INIT  FUNCTIONS ----------------------- #
+    # ---------------------------------------------------------------- #
+
     # ================================================================ #
     # ======================== BASIC FUNCTIONS ======================= #
     # ================================================================ #
@@ -97,30 +141,72 @@ class JointImpedanceControl( object ):
         self.grips[ C.RIGHT ].close(  block = False )
         self.grips[ C.LEFT  ].close(  block = False )
 
+    def preprocess_pose( self, which_arm, old_pose ):
+        # [Moses C. Nah] [2022.05.30]
+        # It is necessary to preprocess the "pose" dictionary into a format that is convenient to feed into Baxter`
+        # Baxter has 7-DOF, and specifying 7 numbers are enough. That is the "pose" info which we use to simplify the code.
+        # [Example] 's0' : 0.3, 's1' : -0.8, 'e0' : -0.0, 'e1' : 0.9,'w0' : -0.0,'w1' : 1.7, 'w2' : -1.4
+        # To feed into this pose information to Baxter, we need to add "right" or "left" prefix for the key values.
+        # Hence, we are preprocessing the pose info to add prefix "right" or "left", and to flip the sign of the numbers
+
+        assert which_arm in [ C.RIGHT, C.LEFT ]
+        assert all( [ c in old_pose.keys( ) for c in C.JOINT_NAMES ] )          # check whether the given dictionary has all the s0, s1, e0, e1, w0, w1 and w2 on the keys.
+
+
+        new_pose = dict( )
+
+        if   which_arm == C.RIGHT:
+            for name in C.JOINT_NAMES:
+                new_pose[ "right_" + name ] = old_pose[ name ]
+
+        elif which_arm == C.LEFT:
+            for name in C.JOINT_NAMES:
+                if name in C.JOINT_TO_FLIP:
+                    new_pose[ "left_" + name ] = -old_pose[ name ]
+                else:
+                    new_pose[ "left_" + name ] =  old_pose[ name ]
+
+        else:
+            NotImplementedError( )
+
+        return new_pose
+
+
+    def move2pose( self, which_arm, pose, wait_time = 1, joint_speed = 0.1 ):
+
+        assert which_arm in [ C.RIGHT, C.LEFT, C.BOTH ]
+        assert all( [ c in pose.keys( ) for c in C.JOINT_NAMES ] )
+
+        # Simple preprocessing for joint_input
+        pose = self.preprocess_pose( which_arm, pose )
+
+        if   which_arm == C.RIGHT or which_arm == C.LEFT:
+            self.arms[ which_arm ].set_joint_position_speed( joint_speed )
+            self.arms[ which_arm ].move_to_joint_positions( pose )
+
+        elif which_arm == C.BOTH:
+            # NEED_TO_USE_IMPEDANCE_CONTROL TO DO THIS
+            NotImplementedError( )
+
+        rospy.sleep( wait_time )
 
 
 
+    def tmp_pose_gen( self, mov_pars ):
+        # mov_pars are in order, s1  e1 and w1
 
-    def robot_init( self ):
-        print("Getting robot state... ")
+        new_pose = dict( )
 
-        self.rs         = baxter_interface.RobotEnable( CHECK_VERSION )
-        self.init_state = self.rs.state().enabled
+        new_pose[ 's0' ] =  0.7869321442
+        new_pose[ 'e0' ] = -0.0149563127
+        new_pose[ 'w0' ] = -0.0464029188
+        new_pose[ 'w2' ] = -1.5823011827
 
-        print("Enabling robot... ")
+        new_pose[ 's1' ] = mov_pars[ 0 ]
+        new_pose[ 'e1' ] = mov_pars[ 1 ]
+        new_pose[ 'w1' ] = mov_pars[ 2 ]
 
-        # Initializing the gripper
-        # [Moses C. Nah] You need to separately save the output to use the grippers
-        self.grip_ctrls = [ GripperConnect( arm ) for arm in C.LIMB_NAMES ]
-
-        # [BACKUP] When you want to control the grippers
-        # Check whether the gripper is opened (100) or closed( 0 )
-        # threshold value is simply 50
-        self.open_gripper( )
-
-        self.rs.enable()
-
-        print("Running. Ctrl-c to quit")
+        return new_pose
 
 
     def get_reference_traj( self, which_arm, pose1, pose2, D, t  ):
@@ -149,6 +235,15 @@ class JointImpedanceControl( object ):
             dq0[ joint_name ] =               1.0/D * ( pose2[ joint_name ] - pose1[ joint_name ] ) * ( 30 * tt ** 2 - 60 * tt ** 3 + 30 * tt ** 4 )
 
         return q0, dq0
+
+    # ---------------------------------------------------------------- #
+    # ------------------------ BASIC FUNCTIONS ----------------------- #
+    # ---------------------------------------------------------------- #
+
+    # ================================================================ #
+    # ======================== MAIN  FUNCTIONS ======================= #
+    # ================================================================ #
+
 
     def joint_impedance( self, which_arm, poses, Ds = None, toffs = None):
 
@@ -238,76 +333,6 @@ class JointImpedanceControl( object ):
                 self.pub.publish( self.msg )
                 control_rate.sleep()
 
-
-    def pose_gen( self, which_arm, old_pose ):
-
-        assert which_arm in [ C.RIGHT, C.LEFT ]
-
-        new_pose = dict( )
-
-        if   which_arm == C.RIGHT:
-            for name in C.JOINT_NAMES:
-                new_pose[ "right_" + name ] = old_pose[ name ]
-
-        elif which_arm == C.LEFT:
-            for name in C.JOINT_NAMES:
-                if name in C.JOINT_TO_FLIP:
-                    new_pose[ "left_" + name ] = -old_pose[ name ]
-                else:
-                    new_pose[ "left_" + name ] =  old_pose[ name ]
-
-        else:
-            NotImplementedError( )
-
-        return new_pose
-
-
-    def tmp_pose_gen( self, mov_pars ):
-        # mov_pars are in order, s1  e1 and w1
-
-        new_pose = dict( )
-
-        new_pose[ 's0' ] =  0.7869321442
-        new_pose[ 'e0' ] = -0.0149563127
-        new_pose[ 'w0' ] = -0.0464029188
-        new_pose[ 'w2' ] = -1.5823011827
-
-        new_pose[ 's1' ] = mov_pars[ 0 ]
-        new_pose[ 'e1' ] = mov_pars[ 1 ]
-        new_pose[ 'w1' ] = mov_pars[ 2 ]
-
-        return new_pose
-
-    def move2pose( self, which_arm, poses, wait_time = 1, joint_speed = 0.1 ):
-
-        # If which_arm is neither 0 nor 1, assert
-        # Iterate along the poses
-
-        # If single dictionary element, then make it as a list
-        poses = [ poses ] if isinstance( poses , dict ) else poses
-
-        for idx, pose in enumerate( poses ):
-            pose = self.pose_gen( which_arm, pose )
-
-            self.arms[ which_arm ].set_joint_position_speed( joint_speed )
-            self.arms[ which_arm ].move_to_joint_positions( pose )
-
-            rospy.sleep( wait_time )
-
-
-    def clean_shutdown(self):
-        """
-            Switches out of joint torque mode to exit cleanly
-        """
-
-        for i in range( 2 ):
-            self.arms[ i ].exit_control_mode( )
-
-        if not self.init_state and self.rs.state().enabled:
-
-            self.msg.on = False
-            self.pub.publish( self.msg )
-            # self.rs.disable()
 
 
 def main():
@@ -417,11 +442,14 @@ def main():
         # [Step #1] Setting the gripper
         # ==================================================================================================== #
 
-
         my_baxter.move2pose( C.RIGHT, C.GRASP_POSE, wait_time = 2, joint_speed = 0.2 )
         my_baxter.move2pose( C.LEFT,  C.GRASP_POSE, wait_time = 2, joint_speed = 0.2 )
 
         rospy.sleep( 5 )
+
+        exit( )
+
+
         my_baxter.close_gripper( )
 
 
