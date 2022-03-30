@@ -13,7 +13,7 @@ import nlopt
 
 # BAXTER Libraries
 import baxter_interface
-import baxter_external_devices          # For keyboard interrupt
+import baxter_external_devices    # For keyboard interrupt
 from   baxter_interface           import CHECK_VERSION
 from   baxter_pykdl               import baxter_kinematics
 
@@ -28,19 +28,17 @@ from my_utils     import GripperConnect, Logger
 # Local Library, customized messages
 from moses_baxter.msg import my_msg
 
-
 class JointImpedanceControl( object ):
     def __init__( self, args ):#, reconfig_server):
 
         self.args         = args
-        self.publish_data = args.publish_data           # Boolean, data saved
-                                                 # Just define the whole arms in the first place to simplify the code
-        self.arms        = list( range( 2 ) )    # Since we have both the left/right arms
-        self.kins        = list( range( 2 ) )    # Since we have both the left/right arms
-        self.grips       = list( range( 2 ) )    # Since we have both the left/right arms
+        self.publish_data = args.publish_data     # Boolean, data saved
+                                                  # Just define the whole arms in the first place to simplify the code
+        self.arms         = list( range( 2 ) )    # Since we have both the left/right arms
+        self.kins         = list( range( 2 ) )    # Since we have both the left/right arms
+        self.grips        = list( range( 2 ) )    # Since we have both the left/right arms
 
-        self.start_time  = rospy.Time.now()
-
+        self.start_time   = rospy.Time.now()
 
         self.pub = rospy.Publisher( 'my_baxter' , my_msg ) # The publisher of my message
 
@@ -67,14 +65,40 @@ class JointImpedanceControl( object ):
         self.rate        = 100.0   # Hz
         self.missed_cmds = 20.0    # Missed cycles before triggering timeout
 
-        # Impedance Parameters for Case 1
-        # self.Kq = C.JOINT_IMP1_Kq
-        # self.Bq = C.JOINT_IMP1_Bq
-
-        self.Kq = C.JOINT_IMP2_Kq
-        self.Bq = C.JOINT_IMP2_Bq
+        # Impedance Parameters for Case
+        self.Kq = C.JOINT_IMP_Kq
+        self.Bq = C.JOINT_IMP_Bq
 
         self.robot_init( )
+
+    # ================================================================ #
+    # ======================== BASIC FUNCTIONS ======================= #
+    # ================================================================ #
+
+    def get_arm_pose( self ):
+
+        l_pose = self.arms[ C.LEFT  ].joint_angles( )
+        r_pose = self.arms[ C.RIGHT ].joint_angles( )
+
+        return l_pose, r_pose
+
+    def get_gripper_pos( self ):
+
+        l_grip = self.grips[ C.LEFT  ].position( )
+        r_grip = self.grips[ C.RIGHT ].position( )
+
+        return l_grip, r_grip
+
+    def open_gripper( self  ):
+        self.grips[ C.RIGHT ].open(  block = False )
+        self.grips[ C.LEFT  ].open(  block = False )
+
+    def close_gripper( self ):
+        self.grips[ C.RIGHT ].close(  block = False )
+        self.grips[ C.LEFT  ].close(  block = False )
+
+
+
 
 
     def robot_init( self ):
@@ -92,24 +116,12 @@ class JointImpedanceControl( object ):
         # [BACKUP] When you want to control the grippers
         # Check whether the gripper is opened (100) or closed( 0 )
         # threshold value is simply 50
-        if self.args.gripper_open:
-            if self.grips[ C.RIGHT ].position( ) <= 50:         # If closed
-                self.grips[ C.RIGHT ].open(  block = False )
-
-            if self.grips[ C.LEFT ].position( ) <= 50:          # if closed
-                self.grips[ C.LEFT ].open(  block = False )
-
+        self.open_gripper( )
 
         self.rs.enable()
 
         print("Running. Ctrl-c to quit")
 
-    # [BACKUP] For initializing the cuff
-    # def check_calibration( self, value ):
-    #     # if self._gripper.calibrated():
-    #     return True
-    #     # else:
-    #     #     return False
 
     def get_reference_traj( self, which_arm, pose1, pose2, D, t  ):
         """
@@ -133,8 +145,8 @@ class JointImpedanceControl( object ):
             tt = t/D if t<=D else 1     # Normalized time as tt, tau is actually the notation but tau is reserved for torque
                                         # If duration bigger than time t than set tt as 1
 
-            q0[  joint_name ] = pose1[ joint_name ] + ( pose2[ joint_name ] - pose1[ joint_name ] ) * (  10 * tt ** 3 - 15 * tt ** 4 +  6 * tt ** 5 )
-            dq0[ joint_name ] =               1.0/D * ( pose2[ joint_name ] - pose1[ joint_name ] ) * (  30 * tt ** 2 - 60 * tt ** 3 + 30 * tt ** 4 )
+            q0[  joint_name ] = pose1[ joint_name ] + ( pose2[ joint_name ] - pose1[ joint_name ] ) * ( 10 * tt ** 3 - 15 * tt ** 4 +  6 * tt ** 5 )
+            dq0[ joint_name ] =               1.0/D * ( pose2[ joint_name ] - pose1[ joint_name ] ) * ( 30 * tt ** 2 - 60 * tt ** 3 + 30 * tt ** 4 )
 
         return q0, dq0
 
@@ -205,7 +217,6 @@ class JointImpedanceControl( object ):
                         self.msg.dq_R[ j ]  =  dq_R[ right_name ]
                         self.msg.tau_R[ j ] = tau_R[ right_name ]
 
-
                     if   which_arm == C.RIGHT:
 
                         self.arms[ C.RIGHT ].set_joint_torques( tau_R )
@@ -251,7 +262,6 @@ class JointImpedanceControl( object ):
         return new_pose
 
 
-
     def tmp_pose_gen( self, mov_pars ):
         # mov_pars are in order, s1  e1 and w1
 
@@ -284,57 +294,31 @@ class JointImpedanceControl( object ):
 
             rospy.sleep( wait_time )
 
-    def control_gripper( self , mode = "timer"):
-        """
-            There are two modes to do the controller of the gripper, simple time wait or keyboard
-        """
-
-        # If the gripper is already closed, then just wait for a bit and intiate the movements
-        if self.grips[ C.RIGHT ].position( ) <= 50 and self.grips[ C.LEFT ].position( ) <= 50:         # If both are closed
-            rospy.sleep( 3 )
-            return
-
-        if   mode == "timer":
-
-            rospy.sleep( 5 )
-
-            self.grips[ C.RIGHT ].close(  block = False )
-            self.grips[ C.LEFT  ].close(  block = False )
-
-        elif mode == "keyboard":
-            # Since the experiment is mostly done by myself, keyboard control is actually not necessary
-            NotImplementedError()
-
-
 
     def clean_shutdown(self):
         """
             Switches out of joint torque mode to exit cleanly
         """
 
-        # print( "\nExiting example..." )
-
         for i in range( 2 ):
-            self.arms[ i ].exit_control_mode()
+            self.arms[ i ].exit_control_mode( )
 
         if not self.init_state and self.rs.state().enabled:
-            # print( "Disabling robot..." )
+
             self.msg.on = False
             self.pub.publish( self.msg )
-
-            self.rs.disable()
+            # self.rs.disable()
 
 
 def main():
 
-    arg_fmt = argparse.RawDescriptionHelpFormatter
-    parser  = argparse.ArgumentParser( formatter_class = arg_fmt )
+    parser  = argparse.ArgumentParser( formatter_class = argparse.RawDescriptionHelpFormatter )
     parser.add_argument('-s', '--publish_data',
                         dest = 'publish_data',   action = 'store_true',
                         help = 'Save the Data')
 
-    parser.add_argument('-g', '--gripper_open',
-                        dest = 'gripper_open',    action = 'store_true',
+    parser.add_argument('-g', '--open_gripper',
+                        dest = 'open_gripper',    action = 'store_true',
                         help = 'Open the gripper for the initialization')
 
     parser.add_argument('-o', '--run_optimization',
@@ -414,8 +398,8 @@ def main():
 
             my_log.write( " [obj] " + str( obj ) + "\n" )
 
-            my_baxter.joint_impedance(  C.BOTH, [ C.FINAL_POSE, C.LIFT_POSE   ], Ds = 5, toffs = [1]  )
-            my_baxter.joint_impedance(  C.BOTH, [ C.LIFT_POSE , C.GRASP_POSE  ], Ds = 5, toffs = [3]  )
+            my_baxter.joint_impedance(  C.BOTH, [ C.FINAL_POSE, C.LIFT_POSE   ], Ds = 5, toffs = [ 1 ]  )
+            my_baxter.joint_impedance(  C.BOTH, [ C.LIFT_POSE , C.GRASP_POSE  ], Ds = 5, toffs = [ 3 ]  )
 
             return 100.0 - obj # Inverting the value
 
@@ -429,18 +413,22 @@ def main():
 
         # Can get the value via rosparam
 
-
         # ==================================================================================================== #
         # [Step #1] Setting the gripper
         # ==================================================================================================== #
 
+
         my_baxter.move2pose( C.RIGHT, C.GRASP_POSE, wait_time = 2, joint_speed = 0.2 )
         my_baxter.move2pose( C.LEFT,  C.GRASP_POSE, wait_time = 2, joint_speed = 0.2 )
+
+        rospy.sleep( 5 )
+        my_baxter.close_gripper( )
+
 
         opt_pars = [-0.55, 1., -1.15555556, 0.9, 0.9, 0.5]
         pose = my_baxter.tmp_pose_gen( opt_pars[ 0:3 ] )
 
-        my_baxter.control_gripper( mode = "timer" )
+
 
 
         input( "Ready for optimization, press any key to continue" )
