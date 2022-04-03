@@ -28,6 +28,61 @@ from my_utils     import GripperConnect, Logger
 # Local Library, customized messages
 from moses_baxter.msg import my_msg
 
+
+# [TODO] [Moses C. Nah] [2022.04.03]
+#   It will be good to have a primitive parent class called "Controller" and then inherit them to the child controllers
+
+class JointImpedanceController( object ):
+    """
+        Joint Impedance Controller
+    """
+
+    def __init__( self, robot ):
+        self.type  = "joint_impedance_controller"
+        self.robot = robot
+
+        # Impedance Parameters for the robot,
+        self.Kq = C.JOINT_IMP_Kq
+        self.Bq = C.JOINT_IMP_Bq
+
+        #
+        self.moves   = []
+        self.n_moves = 0
+
+        # Internal variables, DO NOT CHANGE!
+
+    def add_movement( self , which_arm, pose1, pose2, duration, t_offset ):
+        """
+            Controlling each right/left separately or both.
+
+            Arguments
+            ---------
+                [1] which_arm: either right (C.RIGHT) or left (C.LEFT)
+                [2] pose: dictionary, s0, s1, e0, e1, w0, w1, w2 with corresponding values
+                [3] joint_vel:
+                [4] t_off: time offset with respect to the previous movements, must be nonnegative
+        """
+
+        assert which_arm in [ C.RIGHT, C.LEFT, C.BOTH ]
+        assert all( [ c in pose1.keys( ) for c in C.JOINT_NAMES ] )             # check whether the given dictionary has all the s0, s1, e0, e1, w0, w1 and w2 on the keys.
+        assert all( [ c in pose2.keys( ) for c in C.JOINT_NAMES ] )             # check whether the given dictionary has all the s0, s1, e0, e1, w0, w1 and w2 on the keys.
+        assert duration >= 0
+
+        # Defining the initial position, final position
+        # When adding movement, if t_offset is negative we need to take account for 
+
+
+
+        # Once done generating the movement dictionary, append it to internal dictionary and add the number of movements.
+        self.moves.append( move )
+        self.n_moves += 1
+
+
+
+    def run( self ):
+
+
+
 class JointPositionController( object ):
     """
         Pure position controller
@@ -162,10 +217,6 @@ class Baxter( object ):
                                    # control parameters
         self.rate        = 100.0   # Hz
         self.missed_cmds = 20.0    # Missed cycles before triggering timeout
-
-        # Impedance Parameters for Case
-        self.Kq = C.JOINT_IMP_Kq
-        self.Bq = C.JOINT_IMP_Bq
 
         self.robot_init( )
 
@@ -499,7 +550,7 @@ def main():
         my_ctrl.add_movement( C.LEFT , C.GRASP_POSE, 0.2, 5 )
         my_ctrl.add_movement( C.RIGHT , C.FINAL_POSE, 0.2, 5 )
 
-        # Initiating the movement 
+        # Initiating the movement
         my_ctrl.run( )
 
         exit( )
