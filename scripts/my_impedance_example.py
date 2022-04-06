@@ -28,62 +28,176 @@ from my_utils     import GripperConnect, Logger
 # Local Library, customized messages
 from moses_baxter.msg import my_msg
 
-
-# [TODO] [Moses C. Nah] [2022.04.03]
-#   It will be good to have a primitive parent class called "Controller" and then inherit them to the child controllers
-
-class JointImpedanceController( object ):
+class Controller( object ):
     """
-        Joint Impedance Controller
+        Primitive Controller Object
     """
 
     def __init__( self, robot ):
-        self.type  = "joint_impedance_controller"
+
         self.robot = robot
 
-        # Impedance Parameters for the robot,
-        self.Kq = C.JOINT_IMP_Kq
-        self.Bq = C.JOINT_IMP_Bq
-
-        #
-        self.moves   = []
-        self.n_moves = 0
-
         # Internal variables, DO NOT CHANGE!
+        # Using kinematic symmetry
+        self._r_sign = { "s0": +1, "s1": +1, "e0": +1, "e1": +1, "w0": +1, "w1": +1, "w2": +1 }       # Whether it is plus or minus of the value of the joint
+        self._l_sign = { "s0": -1, "s1": +1, "e0": -1, "e1": +1, "w0": -1, "w1": +1, "w2": -1 }
+        self._signs  = {  C.RIGHT: self._r_sign , C.LEFT: self._l_sign   }
+        self._type   = {  C.RIGHT: "right"      , C.LEFT: "left"         }
 
-    def add_movement( self , which_arm, pose1, pose2, duration, t_offset ):
+class JointImpedanceController( Controller ):
+    """
+        First-order Joint Impedance Controller
+    """
+
+    def __init__( self, robot, Kq, Bq ):
+
+        self.type  = "joint_impedance_controller"
+
+        # Impedance Parameters for the robot,
+        self.Kq = Kq
+        self.Bq = Bq
+
+        # The number of moves and its details
+        # Since the left and right moves can be conducted independently, also saving it independently
+        self.moves   = { C.RIGHT : [ ], C.LEFT : [ ] }
+        self.n_moves = { C.RIGHT :   0, C.LEFT :   0 }
+
+
+    def get_reference_traj( self, t, ti, tf, pi, pf, D ):
         """
-            Controlling each right/left separately or both.
+            Returning the position and velocity data at time t ( current time )
+            Time should start at t = 0
+
+            Arguments
+            ---------
+                [1] t : current time
+                [2] ti: start of the movement
+                [3] tf: end   of the movement
+                [4] pi: initial ( reference ) posture
+                [5] pf: final   ( reference ) posture
+                [6]  D: duration
+
+        """
+
+        # All the time variables must be higher than ti
+        assert  t >= 0 and ti >= 0 and tf >= 0 and D >= 0
+        assert tf >= ti
+
+        if   t <= ti:
+            pos = pi
+            vel = 0
+
+        elif ti < t <= tf:
+            tau = ( t - ti ) / D    # Normalized time
+            pos =    pi + ( pf - pi ) * ( 10 * tau ** 3 - 15 * tau ** 4 +  6 * tau ** 5 )
+            vel = 1 / D * ( pf - pi ) * ( 30 * tau ** 2 - 60 * tau ** 3 + 30 * tau ** 4 )
+
+        else:
+            pos = pf
+            vel = 0
+
+        return pos, vel
+
+    def add_movement( self , which_arm, pose1, pose2, duration, t_off ):
+        """
+            Adding the ZTT (Zero-torque-trajectory) information to the movement.
+            ZTT uses the minimum-jerk-trajectory (quintic 5-th order polynomial) as the basis function.
 
             Arguments
             ---------
                 [1] which_arm: either right (C.RIGHT) or left (C.LEFT)
-                [2] pose: dictionary, s0, s1, e0, e1, w0, w1, w2 with corresponding values
-                [3] joint_vel:
-                [4] t_off: time offset with respect to the previous movements, must be nonnegative
+                [2] pose1    : initial posture of the ZTT (Zero-torque-trajectory)
+                [3] pose2    : final   posture of the ZTT (Zero-torque-trajectory)
+                [4] duration : the    duration of the ZTT (Zero-torque-trajectory)
+                [5] t_off    : time offset with respect to the previous movements, can be negative value since it can overlap with the previous one
+                               If the movement is the first one (i.e., self.n_l_moves == 0 ), automatically set t_off as zero.
+
         """
 
-        assert which_arm in [ C.RIGHT, C.LEFT, C.BOTH ]
-        assert all( [ c in pose1.keys( ) for c in C.JOINT_NAMES ] )             # check whether the given dictionary has all the s0, s1, e0, e1, w0, w1 and w2 on the keys.
-        assert all( [ c in pose2.keys( ) for c in C.JOINT_NAMES ] )             # check whether the given dictionary has all the s0, s1, e0, e1, w0, w1 and w2 on the keys.
+        assert which_arm in [ C.RIGHT, C.LEFT ]
         assert duration >= 0
 
         # Defining the initial position, final position
-        # When adding movement, if t_offset is negative we need to take account for 
+        # When adding movement, if t_off is negative we need to take account for
+        assert all( [ c in pose1.keys( ) for c in C.JOINT_NAMES ] )             # check whether the given dictionary has all the s0, s1, e0, e1, w0, w1 and w2 on the keys.
+        assert all( [ c in pose2.keys( ) for c in C.JOINT_NAMES ] )             # check whether the given dictionary has all the s0, s1, e0, e1, w0, w1 and w2 on the keys.
+
+        # Generating the pose and adding it to the "move" dictionary with key "pose"
+        pi        = dict( )
+        pf        = dict( )
+        limb_name = self._type[  which_arm  ] # Either "right" or "left"
+        sign      = self._signs[ which_arm  ] # refer to the variables declared in "__init__"
+
+        for joint_name in C.JOINT_NAMES:
+            pi[ limb_name + "_" + joint_name ] = pose1[ joint_name ] * sign[ joint_name ]
+            pf[ limb_name + "_" + joint_name ] = pose2[ joint_name ] * sign[ joint_name ]
 
 
+        move = dict( )
 
-        # Once done generating the movement dictionary, append it to internal dictionary and add the number of movements.
-        self.moves.append( move )
-        self.n_moves += 1
+        move[ "pi" ] = pi
+        move[ "pf" ] = pf
+        move[ "D"  ] = duration
+
+        if self.n_r_moves == 0:     # If this is the first movement
+            move[ "t_off" ] = 0
+            move[ "ti"    ] = 0
+            move[ "tf"    ] = D
+
+        else:
+            idx_prev = self.n_r_moves - 1                                       # Index of the previous movement
+            tf_prev  = self.moves[ which_arm ][ idx_prev ][ "tf" ]              # Getting the final time of the previous movement
+
+            move[ "t_off" ] = t_off
+            move[ "ti"    ] = tf_prev + t_off
+            move[ "tf"    ] = tf_prev + t_off + D
 
 
+        self.moves[   which_arm ].append( move )
+        self.n_moves[ which_arm ] += 1
+
+    def _prepare_movement( self ):
+        # Prepare the movement to be conducted
+        # It will be good to save the movement functions
+
+        # Using the simple superposition principle of each movements
+        # If ti and tf is defined, just define the function piecewise.
+
+        # Prepare the movements for right movements
+        for move in self.l_moves:
+            # Calculate the maximum time size for the movement
+            # Since there are 7 joints, we need to have 7 x N array for the calculation
+
+        # Prepare the movements for left movements
+        for move in self.r_moves:
+            # Calculate the maximum time size for the movement
+            # Since there are 7 joints, we need to have 7 x N array for the calculation
+
+
+    def reset( self ):
+        # Emptying out all the movements
+        self.moves   = { C.RIGHT : [ ], C.LEFT : [ ] }
+        self.n_moves = { C.RIGHT :   0, C.LEFT :   0 }
 
     def run( self ):
 
+        assert self.n_r_moves >= 1 or self.n_l_moves >= 1
 
 
-class JointPositionController( object ):
+        self._prepare_movement( )
+
+        # for safety purposes, set the control rate command timeout.
+        # if the specified number of command cycles are missed, the robot will timeout and disable
+        # Regardless of which_arm, setting both the left and right arm set_command
+        control_rate = rospy.Rate( self.rate )             # set control rate
+        assert which_arm in [ C.RIGHT, C.LEFT, C.BOTH ]    # If which_arm is C.BOTH, then we are moving both the left and right arm
+
+        self.robot.arms[ C.RIGHT ].set_command_timeout( ( 1.0 / self.rate ) * self.missed_cmds )
+        self.robot.arms[ C.LEFT  ].set_command_timeout( ( 1.0 / self.rate ) * self.missed_cmds )
+
+
+
+class JointPositionController( Controller ):
     """
         Pure position controller
         Using innate Baxter function
@@ -95,19 +209,12 @@ class JointPositionController( object ):
 
     def __init__( self, robot ):
 
+        super().__init__( robot )
+
         self.type  = "joint_position_controller"
-        self.robot = robot                                                      # Passing Baxter object
 
         self.moves   = []                                                       # Please check "add_movement" method to check the form of the movement.
         self.n_moves = 0
-
-
-        # Internal variables, DO NOT CHANGE!
-        # Using kinematic symmetry
-        self._r_sign = { "s0": +1, "s1": +1, "e0": +1, "e1": +1, "w0": +1, "w1": +1, "w2": +1 }       # Whether it is plus or minus of the value of the joint
-        self._l_sign = { "s0": -1, "s1": +1, "e0": -1, "e1": +1, "w0": -1, "w1": +1, "w2": -1 }
-        self._signs  = {  C.RIGHT: self._r_sign , C.LEFT: self._l_sign   }
-        self._type   = {  C.RIGHT: "right"      , C.LEFT: "left"         }
 
 
     def add_movement( self, which_arm, pose, joint_vel, t_off ):
@@ -117,10 +224,10 @@ class JointPositionController( object ):
 
             Arguments
             ---------
-                [1] which_arm: either right (C.RIGHT) or left (C.LEFT)
-                [2] pose: dictionary, s0, s1, e0, e1, w0, w1, w2 with corresponding values
-                [3] joint_vel:
-                [4] t_off: time offset with respect to the previous movements, must be nonnegative
+                [1] which_arm : either right (C.RIGHT) or left (C.LEFT)
+                [2] pose      : dictionary, s0, s1, e0, e1, w0, w1, w2 with corresponding values
+                [3] joint_vel :
+                [4] t_off     : time offset with respect to the previous movements, must be nonnegative
         """
 
         assert which_arm in [ C.RIGHT, C.LEFT ]
@@ -350,8 +457,8 @@ class Baxter( object ):
         # for safety purposes, set the control rate command timeout.
         # if the specified number of command cycles are missed, the robot will timeout and disable
         # Regardless of which_arm, setting both the left and right arm set_command
-        self.arms[ C.RIGHT ].set_command_timeout( ( 1.0 / self.rate) * self.missed_cmds)
-        self.arms[ C.LEFT  ].set_command_timeout( ( 1.0 / self.rate) * self.missed_cmds)
+        self.arms[ C.RIGHT ].set_command_timeout( ( 1.0 / self.rate) * self.missed_cmds )
+        self.arms[ C.LEFT  ].set_command_timeout( ( 1.0 / self.rate) * self.missed_cmds )
 
 
         N  = len( poses )
@@ -555,6 +662,10 @@ def main():
 
         exit( )
 
+        # In case for an impedance controller
+        my_ctrl = JointImpedanceController( my_baxter, C.JOINT_IMP_Kq, C.JOINT_IMP_Bq )
+
+        exit( )
 
         my_baxter.close_gripper( )
 
