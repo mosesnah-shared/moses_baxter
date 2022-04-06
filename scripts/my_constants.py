@@ -1,10 +1,10 @@
 class Constants:
     PROJECT_NAME            = '[M3X] BAXTER Project'
     VERSION                 = '1.0.1'
-    UPDATE_DATE             = '2021.10.25'
+    UPDATE_DATE             = '2022.04.06'
     AUTHOR_GITHUB           = 'mosesnah-shared'
     AUTHOR_FULL_NAME        = 'Moses C. Nah'
-    URL                     = 'https://github.com/mosesnah-shared/whip-project-targeting',
+    URL                     = 'https://github.com/mosesnah-shared/moses_baxter',
     AUTHOR_EMAIL            = 'mosesnah@mit.edu', 'mosesnah@naver.com'
 
     # =============================================================== #
@@ -34,6 +34,8 @@ class Constants:
 
     LEFT_JOINT_NAMES  = [  "left_s0",  "left_s1",  "left_e0",  "left_e1",  "left_w0",  "left_w1",  "left_w2" ]
     RIGHT_JOINT_NAMES = [ "right_s0", "right_s1", "right_e0", "right_e1", "right_w0", "right_w1", "right_w2" ]
+    JOINT_NAMES_DICT  = { LEFT: LEFT_JOINT_NAMES, RIGHT: RIGHT_JOINT_NAMES }
+
     JOINT_NAMES       = [       "s0",       "s1",       "e0",       "e1",       "w0",       "w1",       "w2" ]
     JOINT_TO_FLIP     = [       "s0",                   "e0",                   "w0",                   "w2" ]
 
