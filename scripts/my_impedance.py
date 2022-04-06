@@ -63,45 +63,19 @@ class JointImpedanceController( Controller ):
         self.n_moves = { C.RIGHT :   0, C.LEFT :   0 }
 
     # Generate a dictionary which values
-    def gen_empty_dict( self, which_arm, val ):
+    def gen_dict( self, which_arm, val ):
+
+        assert which_arm in [ C.RIGHT, C.LEFT ]
+        assert len( val ) == 7 # Must be of length 7
+
         tmp = dict( )
 
-        assert len( val ) == 7 # Must be length of 7
+        limb_name = self._type[ which_arm ]
 
         for i, joint in enumerate( C.JOINT_NAMES ):
             tmp[ limb_name + "_" + joint ] = val[ i ]
 
         return tmp
-
-    def get_reference_traj( self, t, which_arm ):
-
-        assert which_arm in [ C.RIGHT, C.LEFT ]
-        assert t >= 0
-        assert self.n_moves[ which_arm ] >= 1                                   # Should have more than or equal to 1 movement to get the reference trajectory
-
-        q0  = dict( )
-        dq0 = dict( )
-
-        # Iterating through the movement
-        limb_name = self._type[  which_arm  ]                                   # Either "right" or "left"
-
-        for joint_name in C.JOINT_NAMES:
-            tmp = limb_name + "_" + joint_name
-
-            for move in self.moves[ which_arm ]:
-
-                ti  = move[ "ti" ]
-                tf  = move[ "tf" ]
-                pi  = move[ "pi" ][ tmp ]
-                pf  = move[ "pf" ][ tmp ]
-                D   = move[ "D"  ]
-
-                p, v = self.min_jerk_traj( t, ti, tf, pi, pf, D )
-                q0[  tmp ] += p
-                dq0[ tmp ] += v
-
-        return q0, dq0
-
 
     def min_jerk_traj( self, t, ti, tf, pi, pf, D ):
         """
@@ -208,6 +182,34 @@ class JointImpedanceController( Controller ):
         self.moves   = { C.RIGHT : [ ], C.LEFT : [ ] }
         self.n_moves = { C.RIGHT :   0, C.LEFT :   0 }
 
+    def get_reference_traj( self, t, which_arm ):
+
+        assert which_arm in [ C.RIGHT, C.LEFT ]
+        assert t >= 0
+        assert self.n_moves[ which_arm ] >= 1                                   # Should have more than or equal to 1 movement to get the reference trajectory
+
+        q0  = self.gen_dict( which_arm, np.zeros( 7 ) )
+        dq0 = self.gen_dict( which_arm, np.zeros( 7 ) )
+
+        limb_name = self._type[ which_arm ]                                     # Either "right" or "left"
+
+        for joint_name in C.JOINT_NAMES:
+            tmp = limb_name + "_" + joint_name
+
+            for move in self.moves[ which_arm ]:
+
+                ti  = move[ "ti" ]
+                tf  = move[ "tf" ]
+                pi  = move[ "pi" ][ tmp ]
+                pf  = move[ "pf" ][ tmp ]
+                D   = move[ "D"  ]
+
+                p, v = self.min_jerk_traj( t, ti, tf, pi, pf, D )
+                q0[  tmp ] += p
+                dq0[ tmp ] += v
+
+        return q0, dq0
+
     def run( self ):
 
         assert self.n_moves[ C.RIGHT ] >= 1 or self.n_moves[ C.LEFT ] >= 1
@@ -220,9 +222,6 @@ class JointImpedanceController( Controller ):
         self.robot.arms[ C.RIGHT ].set_command_timeout( ( 1.0 / self.rate ) * self.missed_cmds )
         self.robot.arms[ C.LEFT  ].set_command_timeout( ( 1.0 / self.rate ) * self.missed_cmds )
 
-        # Torque input for the left and right
-        tau_R = dict( )
-        tau_L = dict( )
 
         # The initial time for the simulation
         ts = rospy.Time.now( )
@@ -236,21 +235,33 @@ class JointImpedanceController( Controller ):
             t = ( rospy.Time.now( ) - ts ).to_sec( )                            # The elapsed time
 
             # Initialization
-            q0_R, dq0_R = self.get_reference_traj( C.RIGHT )
-            q0_L, dq0_L = self.get_reference_traj( C.LEFT  )
+            q0_R, dq0_R = self.get_reference_traj( t, C.RIGHT )
+            q0_L, dq0_L = self.get_reference_traj( t, C.LEFT  )
 
-            # Check whether the movement exists or not.
+            # Torque input for the left and right
+            tau_R = dict( )
+            tau_L = dict( )
 
             for j, joint in enumerate( C.JOINT_NAMES ):
 
                 right_name = "right_" + joint             # [Example] "right_s0"
                 left_name  =  "left_" + joint             # [Example] "left_s0"
 
-                tau_R[ right_name ]  =  self.Kq[ joint ] * (  q0_R[ right_name ] -  q_R[ right_name ] )   # The Stiffness portion
-                tau_R[ right_name ] +=  self.Bq[ joint ] * ( dq0_R[ right_name ] - dq_R[ right_name ] )   # The Damping   portion
+                # Need to check whether the movement exists
+                if self.n_moves[ C.RIGHT ] == 0:
+                    tau_R[ right_name ]  =  self.gen_dict( which_arm, np.zeros( 7 ) )
 
-                tau_L[ left_name ]   =  self.Kq[ joint ] * (  q0_L[  left_name ] -  q_L[  left_name ] )   # The Stiffness portion
-                tau_L[ left_name ]  +=  self.Bq[ joint ] * ( dq0_L[  left_name ] - dq_L[  left_name ] )   # The Damping   portion
+                else:
+                    tau_R[ right_name ]  =  self.Kq[ joint ] * (  q0_R[ right_name ] -  q_R[ right_name ] )   # The Stiffness portion
+                    tau_R[ right_name ] +=  self.Bq[ joint ] * ( dq0_R[ right_name ] - dq_R[ right_name ] )   # The Damping   portion
+
+
+                if self.n_moves[ C.LEFT ] == 0:
+                    tau_L[ right_name ]  =  self.gen_dict( which_arm, np.zeros( 7 ) )
+
+                else:
+                    tau_L[ left_name ]   =  self.Kq[ joint ] * (  q0_L[  left_name ] -  q_L[  left_name ] )   # The Stiffness portion
+                    tau_L[ left_name ]  +=  self.Bq[ joint ] * ( dq0_L[  left_name ] - dq_L[  left_name ] )   # The Damping   portion
 
                 if self.publish_data:
                     self.msg.q0_L[ j ]  =  q0_L[  left_name ]
@@ -263,21 +274,9 @@ class JointImpedanceController( Controller ):
                     self.msg.dq_R[ j ]  =  dq_R[ right_name ]
                     self.msg.tau_R[ j ] = tau_R[ right_name ]
 
-                if   which_arm == C.RIGHT:
 
-                    self.arms[ C.RIGHT ].set_joint_torques( tau_R )
-
-                elif which_arm == C.LEFT:
-
-                    self.arms[ C.LEFT  ].set_joint_torques( tau_L )
-
-                elif which_arm == C.BOTH:
-
-                    self.arms[ C.RIGHT ].set_joint_torques( tau_R )
-                    self.arms[ C.LEFT  ].set_joint_torques( tau_L )
-
-                else:
-                    NotImplementedError( )
+                self.robot.arms[ C.RIGHT ].set_joint_torques( tau_R )
+                self.robot.arms[ C.LEFT  ].set_joint_torques( tau_L )
 
 
 
@@ -594,9 +593,9 @@ def main():
         my_ctrl = JointPositionController( my_baxter )
 
         # Adding the details of the movements to be sequentially conducted
-        my_ctrl.add_movement( C.RIGHT, C.GRASP_POSE, 0.2, 5 )
-        my_ctrl.add_movement( C.RIGHT, C.REST_POSE, 0.2, 5 )
-        my_ctrl.add_movement( C.LEFT , C.GRASP_POSE, 0.2, 5 )
+        my_ctrl.add_movement( C.RIGHT , C.GRASP_POSE, 0.2, 5 )
+        my_ctrl.add_movement( C.RIGHT , C.REST_POSE , 0.2, 5 )
+        my_ctrl.add_movement( C.LEFT  , C.GRASP_POSE, 0.2, 5 )
         my_ctrl.add_movement( C.RIGHT , C.FINAL_POSE, 0.2, 5 )
 
         # Initiating the movement
