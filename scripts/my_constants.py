@@ -105,21 +105,21 @@ class Constants:
 
     # IMPEDANCE PARAMETERS
     # Case 1 - Stronger
-    JOINT_IMP_Kq  = { 's0': 10.0,
-                      's1': 15.0,
-                      'e0':  5.0,
-                      'e1': 20.0,
-                      'w0':  3.0,
-                      'w1': 12.0,
-                      'w2':  1.5 }
+    JOINT_IMP_Kq  = { 'right_s0': 10.0,
+                      'right_s1': 15.0,
+                      'right_e0':  5.0,
+                      'right_e1': 20.0,
+                      'right_w0':  3.0,
+                      'right_w1': 12.0,
+                      'right_w2':  1.5 }
 
-    JOINT_IMP_Bq  = { 's0':  5.0,
-                      's1': 10.0,
-                      'e0':  2.5,
-                      'e1':  7.5,
-                      'w0':  0.1,
-                      'w1':  1.0,
-                      'w2':  1.5  }
+    JOINT_IMP_Bq  = { 'right_s0':  5.0,
+                      'right_s1': 10.0,
+                      'right_e0':  2.5,
+                      'right_e1':  7.5,
+                      'right_w0':  0.1,
+                      'right_w1':  1.0,
+                      'right_w2':  1.5  }
 
 
     # # Case 1 - original 2022.01.28

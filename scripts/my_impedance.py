@@ -44,10 +44,20 @@ class Controller( object ):
 
         new = dict( )
 
-        for i, joint_name in enumerate( C.JOINT_NAMES[ which_arm ] ):
+        for i, joint_name in C.JOINT_NAMES[ which_arm ]:
             new[ joint_name ] = arr[ i ]
 
         return new
+
+    def poses_delta( self, which_arm: str, pose1: dict, pose2: dict ):
+        """
+            conduct pose2 - pose1 for each element
+        """
+        assert all( [ c in pose1.keys( ) for c in C.JOINT_NAMES[ which_arm ] ] )
+        assert all( [ c in pose2.keys( ) for c in C.JOINT_NAMES[ which_arm ] ] )
+
+        return { key: pose2[ key ] - pose1[ key ] for key in pose1.keys( ) }
+
 
     def pose_right2left( self, pose: dict ):
         """
@@ -69,36 +79,23 @@ class Controller( object ):
 
 class JointImpedanceController( Controller ):
     """
-        First-order Joint Impedance Controller
+        1st-order joint-space impedance controller
+        The equation is as follows:
+            tau = Kq( q0 - q ) + Bq( dq0 - dq ) + tau_G
+
+        tau_G, the gravity compensation torque is conducted by Baxter alone
     """
 
-    def __init__( self, robot, Kq, Bq ):
+    def __init__( self, robot, Kq : dict, Bq : dict ):
+
 
         self.type  = "joint_impedance_controller"
+        self.Kq    = Kq
+        self.Bq    = Bq
 
-        # Impedance Parameters for the robot,
-        self.Kq = Kq
-        self.Bq = Bq
-
-        # The number of moves and its details
         # Since the left and right moves can be conducted independently, also saving it independently
-        self.moves   = { C.RIGHT : [ ], C.LEFT : [ ] }
-        self.n_moves = { C.RIGHT :   0, C.LEFT :   0 }
-
-    # Generate a dictionary which values
-    def gen_dict( self, which_arm, val ):
-
-        assert which_arm in [ C.RIGHT, C.LEFT ]
-        assert len( val ) == 7 # Must be of length 7
-
-        tmp = dict( )
-
-        limb_name = self._type[ which_arm ]
-
-        for i, joint in enumerate( C.JOINT_NAMES ):
-            tmp[ limb_name + "_" + joint ] = val[ i ]
-
-        return tmp
+        self.moves   = { "right" : [ ], "left" : [ ] }
+        self.n_moves = { "right" :   0, "left" :   0 }
 
     def min_jerk_traj( self, t: float, ti: float, tf: float, pi: float, pf: float, D: float ):
         """
@@ -117,122 +114,109 @@ class JointImpedanceController( Controller ):
 
         """
 
-        assert  t >= 0 and ti >= 0 and tf >= 0 and D >= 0
+        assert  t >=  0 and ti >= 0 and tf >= 0 and D >= 0
         assert tf >= ti
 
         if   t <= ti:
-            # Before the initial posture
             pos = pi
             vel = 0
 
         elif ti < t <= tf:
-            # During the movement
-            tau = ( t - ti ) / D    # Normalized time
+            tau = ( t - ti ) / D                                                # Normalized time
             pos =    pi + ( pf - pi ) * ( 10 * tau ** 3 - 15 * tau ** 4 +  6 * tau ** 5 )
             vel = 1 / D * ( pf - pi ) * ( 30 * tau ** 2 - 60 * tau ** 3 + 30 * tau ** 4 )
 
         else:
-            # After the movement
             pos = pf
             vel = 0
 
         return pos, vel
 
-    def add_movement( self, which_arm: int, pose1: dict, pose2: dict, duration: float, toff: float ):
+    def reset( self ):
+        self.moves   = { "right" : [ ], "left" : [ ] }
+        self.n_moves = { "right" :   0, "left" :   0 }
+
+    def add_movement( self, which_arm: str, pose_init: dict, pose_final: dict, duration: float, toff: float ):
         """
             Adding the ZTT (Zero-torque-trajectory) information to the movement.
             ZTT uses the minimum-jerk-trajectory (quintic 5-th order polynomial) as the basis function.
 
-            Arguments
-            ---------
-                [1] which_arm: either right (C.RIGHT) or left (C.LEFT)
-                [2] pose1    : initial posture of the ZTT (Zero-torque-trajectory)
-                [3] pose2    : final   posture of the ZTT (Zero-torque-trajectory)
-                [4] duration : the    duration of the ZTT (Zero-torque-trajectory)
-                [5] toff     : time offset with respect to the previous movements, can be negative value since it can overlap with the previous one
-                               If the movement is the first one (i.e., self.n_l_moves == 0 ), automatically set toff as zero.
+            Arguments:
+
+                [1] which_arm  (str)   : either "right" or "left"
+                [2] pose_init  (dict)  : initial "right" posture of the ZTT (Zero-torque-trajectory)
+                [3] pose_final (dict)  : final   "right" posture of the ZTT (Zero-torque-trajectory)
+                [4] duration   (float) : the    duration of the ZTT (Zero-torque-trajectory)
+                [5] toff       (float) : time offset with respect to the previous movements, can be negative value since it can overlap with the previous one
+                                         If the movement is the first one (i.e., self.n_l_moves == 0 ), automatically set toff as zero.
 
         """
 
-        assert which_arm in [ C.RIGHT, C.LEFT ]
+        assert which_arm in [ "right", "left" ]
         assert duration >= 0
+        assert all( [ c in pose_init.keys(  ) for c in C.JOINT_NAMES[ "right" ] )
+        assert all( [ c in pose_final.keys( ) for c in C.JOINT_NAMES[ "right" ] )
 
-        D = duration
+        # Details of movement to add
+        move = dict( )
 
-        # Defining the initial position, final position
-        # When adding movement, if toff is negative we need to take account for
-        assert all( [ c in pose1.keys( ) for c in C.JOINT_NAMES ] )             # check whether the given dictionary has all the s0, s1, e0, e1, w0, w1 and w2 on the keys.
-        assert all( [ c in pose2.keys( ) for c in C.JOINT_NAMES ] )             # check whether the given dictionary has all the s0, s1, e0, e1, w0, w1 and w2 on the keys.
+        if self.n_moves[ which_arm ] == 0:                                      # For the 1st position
 
-        move      = dict( )      # Details of movement to add
-
-        # Generating the pose and adding it to the "move" dictionary with key "pose"
-        pi        = dict( )
-        pf        = dict( )
-        limb_name = self._type[  which_arm  ]                                   # Either "right" or "left"
-        sign      = self._signs[ which_arm  ]                                   # refer to the variables declared in "__init__"
-
-        if self.n_moves[ which_arm ] == 0:      # If it is the 1st movement
-
-            for joint_name in C.JOINT_NAMES:
-                pi[ limb_name + "_" + joint_name ] = pose1[ joint_name ] * sign[ joint_name ]
-                pf[ limb_name + "_" + joint_name ] = pose2[ joint_name ] * sign[ joint_name ]
-
+            pi   = self.pose_right2left( pose_init  ) if which_arm == "left" else pose_init
+            pf   = self.pose_right2left( pose_final ) if which_arm == "left" else pose_final
             toff = 0
             ti   = 0
-            tf   = D
+            tf   = duration
+            D    = duration
 
-        else:                                   # For movements larger than 2nd, 3rd movement
-            for joint_name in C.JOINT_NAMES:
-                pi[ limb_name + "_" + joint_name ] = 0
-                pf[ limb_name + "_" + joint_name ] = ( pose2[ joint_name ] - pose1[ joint_name ] ) * sign[ joint_name ]       # Except for the 1st movement, putting pf - pi for the position
+        else:
 
             idx_prev = self.n_moves[ which_arm ] - 1                            # Index of the previous movement
             tf_prev  = self.moves[ which_arm ][ idx_prev ][ "tf" ]              # Getting the final time of the previous movement
 
+            tmpi = self.pose_right2left( pose_init  ) if which_arm == "left" else pose_init
+            tmpf = self.pose_right2left( pose_final ) if which_arm == "left" else pose_final
+
+            pi   = self.gen_dict( which_arm = "left", arr = np.zeros( 7 ) )     # Zero initial posture
+            pf   = self.delta_poses( tmpi, tmpf )                               # Doing tmpf - tmpi
             toff = toff
-            ti   = tf_prev + toff      if tf_prev + toff     >=0 else 0
-            tf   = tf_prev + toff + D  if tf_prev + toff + D >=0 else D
+            ti   = tf_prev + toff      if tf_prev + toff     >= 0 else 0
+            tf   = tf_prev + toff + D  if tf_prev + toff + D >= 0 else duration
+            D    = duration
+
 
         move[ "toff" ] = toff
         move[ "ti"   ] = ti
         move[ "tf"   ] = tf
         move[ "pi"   ] = pi
         move[ "pf"   ] = pf
-        move[ "D"    ] = duration
+        move[ "D"    ] = D
 
         self.moves[   which_arm ].append( move )
         self.n_moves[ which_arm ] += 1
 
-    def reset( self ):
-        self.moves   = { C.RIGHT : [ ], C.LEFT : [ ] }
-        self.n_moves = { C.RIGHT :   0, C.LEFT :   0 }
 
-    def get_reference_traj( self, t, which_arm ):
+    def get_reference_traj( self, which_arm: str, t: float ):
 
-        assert which_arm in [ C.RIGHT, C.LEFT ]
+        assert which_arm in [ "right", "left" ]
         assert t >= 0
         assert self.n_moves[ which_arm ] >= 1                                   # Should have more than or equal to 1 movement to get the reference trajectory
 
         q0  = self.gen_dict( which_arm, np.zeros( 7 ) )
         dq0 = self.gen_dict( which_arm, np.zeros( 7 ) )
 
-        limb_name = self._type[ which_arm ]                                     # Either "right" or "left"
-
-        for joint_name in C.JOINT_NAMES:
-            tmp = limb_name + "_" + joint_name
-
+        for joint_name in C.JOINT_NAMES[ which_arm ]:
             for move in self.moves[ which_arm ]:
 
                 ti  = move[ "ti" ]
                 tf  = move[ "tf" ]
-                pi  = move[ "pi" ][ tmp ]
-                pf  = move[ "pf" ][ tmp ]
+                pi  = move[ "pi" ][ joint_name ]
+                pf  = move[ "pf" ][ joint_name ]
                 D   = move[ "D"  ]
 
                 p, v = self.min_jerk_traj( t, ti, tf, pi, pf, D )
-                q0[  tmp ] += p
-                dq0[ tmp ] += v
+                q0[  joint_name ] += p
+                dq0[ joint_name ] += v
 
         return q0, dq0
 
@@ -258,36 +242,26 @@ class JointImpedanceController( Controller ):
                 rospy.logerr( "Impedance example failed to meet, specified control rate timeout." )
                 break
 
-            t = ( rospy.Time.now( ) - ts ).to_sec( )                            # The elapsed time
+            # The elapsed time
+            t = ( rospy.Time.now( ) - ts ).to_sec( )
 
-            # Initialization
-            q0_R, dq0_R = self.get_reference_traj( t, C.RIGHT )
-            q0_L, dq0_L = self.get_reference_traj( t, C.LEFT  )
+            q0_R, dq0_R = self.get_reference_traj( which_arm = "right", t )
+            q0_L, dq0_L = self.get_reference_traj( which_arm = "left" , t )
 
-            # Torque input for the left and right
-            tau_R = dict( )
-            tau_L = dict( )
+            q0  = { "right": q0_R , "left": q0_L  }
+            dq0 = { "right", dq0_R, "left": dq0_L }
+            tau = { "right": self.gen_dict( which_arm = "right", np.zeros( 7 ) ),
+                     "left": self.gen_dict( which_arm =  "left", np.zeros( 7 ) }
 
-            for j, joint in enumerate( C.JOINT_NAMES ):
-
-                right_name = "right_" + joint             # [Example] "right_s0"
-                left_name  =  "left_" + joint             # [Example] "left_s0"
+            for which_arm in [ "right", "left" ]:
 
                 # Need to check whether the movement exists
-                if self.n_moves[ C.RIGHT ] == 0:
-                    tau_R[ right_name ]  =  self.gen_dict( which_arm, np.zeros( 7 ) )
+                if self.n_moves[ which_arm ] == 0:
+                    continue
 
-                else:
-                    tau_R[ right_name ]  =  self.Kq[ joint ] * (  q0_R[ right_name ] -  q_R[ right_name ] )   # The Stiffness portion
-                    tau_R[ right_name ] +=  self.Bq[ joint ] * ( dq0_R[ right_name ] - dq_R[ right_name ] )   # The Damping   portion
-
-
-                if self.n_moves[ C.LEFT ] == 0:
-                    tau_L[ right_name ]  =  self.gen_dict( which_arm, np.zeros( 7 ) )
-
-                else:
-                    tau_L[ left_name ]   =  self.Kq[ joint ] * (  q0_L[  left_name ] -  q_L[  left_name ] )   # The Stiffness portion
-                    tau_L[ left_name ]  +=  self.Bq[ joint ] * ( dq0_L[  left_name ] - dq_L[  left_name ] )   # The Damping   portion
+                for joint_name in C.JOINT_NAMES[ which_arm ]:
+                    tau[ which_arm ][ joint_name ]  =  self.Kq[ which_arm ][ joint_name ] * (  q0[ which_arm ][ joint_name ] -  q[ which_arm ][ joint_name )
+                    tau[ which_arm ][ joint_name ] +=  self.Bq[ which_arm ][ joint_name ] * ( dq0[ which_arm ][ joint_name ] - dq[ which_arm ][ joint_name )
 
                 if self.publish_data:
                     self.msg.q0_L[ j ]  =  q0_L[  left_name ]
@@ -300,9 +274,8 @@ class JointImpedanceController( Controller ):
                     self.msg.dq_R[ j ]  =  dq_R[ right_name ]
                     self.msg.tau_R[ j ] = tau_R[ right_name ]
 
-
-                self.robot.arms[ C.RIGHT ].set_joint_torques( tau_R )
-                self.robot.arms[ C.LEFT  ].set_joint_torques( tau_L )
+                self.robot.arms[ "right" ].set_joint_torques( tau[ "right" ] )
+                self.robot.arms[ "left"  ].set_joint_torques( tau[ "left"  ] )
 
 
 class JointPositionController( Controller ):
