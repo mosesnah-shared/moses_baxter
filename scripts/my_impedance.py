@@ -37,12 +37,35 @@ class Controller( object ):
 
         self.robot = robot
 
-        # Internal variables, DO NOT CHANGE!
-        # Using kinematic symmetry
-        self._r_sign = { "s0": +1, "s1": +1, "e0": +1, "e1": +1, "w0": +1, "w1": +1, "w2": +1 }       # Whether it is plus or minus of the value of the joint
-        self._l_sign = { "s0": -1, "s1": +1, "e0": -1, "e1": +1, "w0": -1, "w1": +1, "w2": -1 }
-        self._signs  = {  C.RIGHT: self._r_sign , C.LEFT: self._l_sign   }
-        self._type   = {  C.RIGHT: "right"      , C.LEFT: "left"         }
+    def gen_dict( self, which_arm: str, arr: np.ndarray ):
+
+        assert which_arm in [ "right", "left" ]
+        assert len( arr ) == 7
+
+        new = dict( )
+
+        for i, joint_name in enumerate( C.JOINT_NAMES[ which_arm ] ):
+            new[ joint_name ] = arr[ i ]
+
+        return new
+
+    def pose_right2left( self, pose: dict ):
+        """
+            Changing the dictionary key's prefix name from "right_" to "left_", and flipping the sign too
+            The reason why we don't have left2right is because we will follow the "right-hand" convention
+
+            Arguments:
+                [1] pose ( dict ): 7-element dictionary with keys "right_" + s0, s1, e0, e1, w0, w1, w2
+        """
+        assert all( [ c in pose.keys( ) for c in C.JOINT_NAMES[ "right" ] ] )   # check whether the given dictionary has all the "right_" + s0, s1, e0, e1, w0, w1 and w2 on the keys.
+
+        new_pose = dict( )
+
+        for right_name in C.JOINT_NAMES[ "right" ]:
+            left_name = C.RIGHT2LEFT[ right_name ]
+            new_pose[ left_name ] = C.LEFT_JOINT_SIGN[ left_name ] * pose[ right_name ]
+
+        return new_pose
 
 class JointImpedanceController( Controller ):
     """
@@ -77,7 +100,7 @@ class JointImpedanceController( Controller ):
 
         return tmp
 
-    def min_jerk_traj( self, t, ti, tf, pi, pf, D ):
+    def min_jerk_traj( self, t: float, ti: float, tf: float, pi: float, pf: float, D: float ):
         """
             Returning the 1D position and velocity data at time t of the minimum-jerk-trajectory ( current time )
             Time should start at t = 0
@@ -115,7 +138,7 @@ class JointImpedanceController( Controller ):
 
         return pos, vel
 
-    def add_movement( self, which_arm, pose1, pose2, duration, toff ):
+    def add_movement( self, which_arm: int, pose1: dict, pose2: dict, duration: float, toff: float ):
         """
             Adding the ZTT (Zero-torque-trajectory) information to the movement.
             ZTT uses the minimum-jerk-trajectory (quintic 5-th order polynomial) as the basis function.
@@ -282,8 +305,6 @@ class JointImpedanceController( Controller ):
                 self.robot.arms[ C.LEFT  ].set_joint_torques( tau_L )
 
 
-
-
 class JointPositionController( Controller ):
     """
         Pure position controller
@@ -298,47 +319,40 @@ class JointPositionController( Controller ):
 
         super().__init__( robot )
 
-        self.type  = "joint_position_controller"
-
-        self.moves   = []                                                       # Please check "add_movement" method to check the form of the movement.
+        self.type    = "joint_position_controller"
+        self.moves   = []                               # Elements should be dictionary Type
         self.n_moves = 0
 
-
-    def add_movement( self, which_arm, pose, joint_vel, toff ):
+    def add_movement( self, which_arm: str, pose2go: dict, joint_vel: float, toff: float ):
         """
+            Adding details of the movement to be conducted
             The problem of this controller is that we cannot move both limbs simultaneously.
             Hence each right/left limb will move separately.
 
-            Arguments
-            ---------
-                [1] which_arm : either right (C.RIGHT) or left (C.LEFT)
-                [2] pose      : dictionary, s0, s1, e0, e1, w0, w1, w2 with corresponding values
-                [3] joint_vel :
-                [4] toff     : time offset with respect to the previous movements, must be nonnegative
+            Arguments:
+                [1] which_arm (str)   : Either "right" or "left"
+                [2] pose2go   (dict)  : Keys "right_" + s0, s1, e0, e1, w0, w1, w2 with corresponding values.
+                                        In case if which_arm is left, should change prefix "right" to "left"
+                [3] joint_vel (float) : Ranged (0,1) and argument for "set_joint_position_speed" method
+                [4] toff      (float) : time offset with respect to the previous movements, must be nonnegative
         """
 
-        assert which_arm in [ C.RIGHT, C.LEFT ]
-        assert all( [ c in pose.keys( ) for c in C.JOINT_NAMES ] )              # check whether the given dictionary has all the s0, s1, e0, e1, w0, w1 and w2 on the keys.
+        assert which_arm in [ "right", "left" ]
+        assert all( [ c in pose2go.keys( ) for c in C.JOINT_NAMES[ "right" ] ] )   # check whether the given dictionary has all the "right_" + s0, s1, e0, e1, w0, w1 and w2 on the keys.
         assert joint_vel >= 0 and joint_vel <= 1
         assert      toff >= 0
 
+        # If which_arm is LEFT, change the pose2go to "left" pose (mirror image)
+        pose = self.pose_right2left( pose2go ) if which_arm == "left" else pose2go
 
-        # Generating the pose and adding it to the "move" dictionary with key "pose"
-        new_pose  = dict( )
-        limb_name = self._type[  which_arm  ] # Either "right" or "left"
-        sign      = self._signs[ which_arm  ] # refer to the variables declared in "__init__"
-
-        for joint_name in C.JOINT_NAMES:
-            new_pose[ limb_name + "_" + joint_name ] = pose[ joint_name ] * sign[ joint_name ]        # Making the code economic using the kinematic symmetry of the robot
-
-        # Now adding the details to the movement
+        # Generating the movement details
         move = dict( )
         move[ "which_arm" ] = which_arm
-        move[ "pose"      ] = new_pose
+        move[ "pose"      ] = pose
         move[ "joint_vel" ] = joint_vel
         move[ "toff"      ] = toff
 
-        # Once done generating the movement dictionary, append it to internal dictionary and add the number of movements.
+        # Adding the movement details
         self.moves.append( move )
         self.n_moves += 1
 
@@ -361,13 +375,12 @@ class JointPositionController( Controller ):
 
             which_arm = move[ "which_arm" ]
             pose      = move[ "pose"      ]
-            j_vel     = move[ "joint_vel" ]
+            vel       = move[ "joint_vel" ]
             toff      = move[ "toff"      ]
 
-            self.robot.arms[ which_arm ].set_joint_position_speed( j_vel )
+            self.robot.arms[ which_arm ].set_joint_position_speed( vel )
             self.robot.arms[ which_arm ].move_to_joint_positions( pose )
-
-            rospy.sleep( off )
+            rospy.sleep( toff )
 
 
 class Baxter( object ):
@@ -381,22 +394,21 @@ class Baxter( object ):
         self.args         = args
         self.publish_data = args.publish_data     # Boolean, data saved
                                                   # Just define the whole arms in the first place to simplify the code
-        self.arms         = list( range( 2 ) )    # Since we have both the left/right arms
-        self.kins         = list( range( 2 ) )    # Since we have both the left/right arms
-        self.grips        = list( range( 2 ) )    # Since we have both the left/right arms
+        self.arms         = dict( )
+        self.kins         = dict( )
+        self.grips        = dict( )
 
         self.start_time   = rospy.Time.now()
 
-        self.pub = rospy.Publisher( 'my_baxter' , my_msg ) # The publisher of my message
-
+        self.pub    = rospy.Publisher( 'my_baxter' , my_msg )
         self.msg    = my_msg()
         self.msg.on = True
 
         # Saving the limb objects
-        for idx, name in enumerate( [ "right", "left" ] ):
-            self.arms[  idx ] = baxter_interface.limb.Limb( name )
-            self.kins[  idx ] = baxter_kinematics(          name )
-            self.grips[ idx ] = baxter_interface.Gripper(   name )
+        for limb_name in [ "right", "left" ]:
+            self.arms[  limb_name ] = baxter_interface.limb.Limb( limb_name )
+            self.kins[  limb_name ] = baxter_kinematics(          limb_name )
+            self.grips[ limb_name ] = baxter_interface.Gripper(   limb_name )
 
             # Initialize the gripper
             # [MOSES] [2021.10.31]
@@ -406,7 +418,6 @@ class Baxter( object ):
 
             # self.grips[ idx ].set_holding_force( 100 )  # Initialize the grippers holding force
             # self.grips[ idx ].open(  block = False )    # Open the gripper too
-
 
                                    # control parameters
         self.rate        = 100.0   # Hz
@@ -424,7 +435,7 @@ class Baxter( object ):
         # Initializing the gripper
         # [Moses C. Nah] You need to separately save the output to use the grippers
         #                Hence, adding this seemingly-redundant Code
-        self.grip_ctrls = [ GripperConnect( arm ) for arm in C.LIMB_NAMES ]
+        self.grip_ctrls = [ GripperConnect( arm ) for arm in [ "left", "right" ] ]
 
         # [BACKUP] When you want to control the grippers
         # Check whether the gripper is opened (100) or closed( 0 )
@@ -439,8 +450,8 @@ class Baxter( object ):
 
         print( "[LOG] [SHUTTING DOWN ROBOT]" )
 
-        for i in range( 2 ):
-            self.arms[ i ].exit_control_mode( )
+        for limb_name in [ "left", "right" ]:
+            self.arms[ limb_name ].exit_control_mode( )
 
         if not self.init_state and self.rs.state().enabled:
 
@@ -456,22 +467,25 @@ class Baxter( object ):
     # ======================== BASIC FUNCTIONS ======================= #
     # ================================================================ #
 
-    def get_arm_pose( self, which_arm ):
+    def get_arm_pose( self, which_arm: str ):
+        assert which_arm in [ "right", "left" ]
         return self.arms[ which_arm  ].joint_angles( )
 
-    def get_arm_velocity( self, which_arm ):
+    def get_arm_velocity( self, which_arm: str ):
+        assert which_arm in [ "right", "left" ]
         return self.arms[ which_arm  ].joint_velocities( )
 
-    def get_gripper_pos( self, which_arm ) :
+    def get_gripper_pos( self, which_arm: str ) :
+        assert which_arm in [ "right", "left" ]
         return self.grips[ which_arm ].position( )
 
     def open_gripper( self  ):
-        self.grips[ C.RIGHT ].open(  block = False )
-        self.grips[ C.LEFT  ].open(  block = False )
+        self.grips[ "right" ].open(  block = False )
+        self.grips[  "left" ].open(  block = False )
 
     def close_gripper( self ):
-        self.grips[ C.RIGHT ].close(  block = False )
-        self.grips[ C.LEFT  ].close(  block = False )
+        self.grips[ "right" ].close(  block = False )
+        self.grips[  "left" ].close(  block = False )
 
     # ---------------------------------------------------------------- #
     # ------------------------ BASIC FUNCTIONS ----------------------- #
@@ -596,10 +610,12 @@ def main():
         my_ctrl = JointPositionController( my_baxter )
 
         # Adding the details of the movements to be sequentially conducted
-        my_ctrl.add_movement( C.RIGHT , C.GRASP_POSE, 0.2, 5 )
-        my_ctrl.add_movement( C.RIGHT , C.REST_POSE , 0.2, 5 )
-        my_ctrl.add_movement( C.LEFT  , C.GRASP_POSE, 0.2, 5 )
-        my_ctrl.add_movement( C.RIGHT , C.FINAL_POSE, 0.2, 5 )
+        my_ctrl.add_movement( which_arm = "right" , pose2go = C.GRASP_POSE, joint_vel = 0.2, toff = 5 )
+        my_ctrl.add_movement( which_arm = "left"  , pose2go = C.GRASP_POSE, joint_vel = 0.2, toff = 5 )
+        my_ctrl.add_movement( which_arm = "left"  , pose2go = C.LIFT_POSE , joint_vel = 0.2, toff = 5 )
+        my_ctrl.add_movement( which_arm = "right" , pose2go = C.LIFT_POSE , joint_vel = 0.2, toff = 5 )
+        my_ctrl.add_movement( which_arm = "right" , pose2go = C.FINAL_POSE, joint_vel = 0.2, toff = 5 )
+        my_ctrl.add_movement( which_arm = "left"  , pose2go = C.FINAL_POSE , joint_vel = 0.2, toff = 5 )
 
         # Initiating the movement
         my_ctrl.run( )
