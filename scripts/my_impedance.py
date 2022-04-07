@@ -79,8 +79,9 @@ class JointImpedanceController( Controller ):
 
     def min_jerk_traj( self, t, ti, tf, pi, pf, D ):
         """
-            Returning the position and velocity data at time t of the minimum-jerk-trajectory ( current time )
+            Returning the 1D position and velocity data at time t of the minimum-jerk-trajectory ( current time )
             Time should start at t = 0
+            Note that the minimum-jerk-trajectory remains at the initial (respectively, final) posture before (after) the movement.
 
             Arguments
             ---------
@@ -93,20 +94,22 @@ class JointImpedanceController( Controller ):
 
         """
 
-        # All the time variables must be higher than ti
         assert  t >= 0 and ti >= 0 and tf >= 0 and D >= 0
         assert tf >= ti
 
         if   t <= ti:
+            # Before the initial posture
             pos = pi
             vel = 0
 
         elif ti < t <= tf:
+            # During the movement
             tau = ( t - ti ) / D    # Normalized time
             pos =    pi + ( pf - pi ) * ( 10 * tau ** 3 - 15 * tau ** 4 +  6 * tau ** 5 )
             vel = 1 / D * ( pf - pi ) * ( 30 * tau ** 2 - 60 * tau ** 3 + 30 * tau ** 4 )
 
         else:
+            # After the movement
             pos = pf
             vel = 0
 
