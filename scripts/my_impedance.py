@@ -244,7 +244,7 @@ class JointImpedanceController( Controller ):
         # The initial time for the simulation
         ts = rospy.Time.now( )
         t  = 0
-        while not rospy.is_shutdown( ) or t <= 20:
+        while not rospy.is_shutdown( ) and t <= 8:
 
             if not self.robot.rs.state( ).enabled:
                 rospy.logerr( "Impedance example failed to meet, specified control rate timeout." )
@@ -261,7 +261,9 @@ class JointImpedanceController( Controller ):
             tau = { "right": self.gen_dict( "right", np.zeros( 7 ) ) ,
                      "left": self.gen_dict( "left" , np.zeros( 7 ) ) }
 
-            for which_arm in [ "right", "left" ]:
+            # print( "time", t)
+
+            for which_arm in [ "right" , "left" ]:
 
                 # Need to check whether the movement exists
                 if self.n_moves[ which_arm ] == 0:
@@ -275,6 +277,12 @@ class JointImpedanceController( Controller ):
                     tau[ which_arm ][ joint_name ]  =  self.Kq[ which_arm ][ joint_name ] * (  q0[ which_arm ][ joint_name ] -  q[ joint_name ] )
                     tau[ which_arm ][ joint_name ] +=  self.Bq[ which_arm ][ joint_name ] * ( dq0[ which_arm ][ joint_name ] - dq[ joint_name ] )
 
+                    # print( which_arm, joint_name,   "q",   q[ joint_name ] )
+                    # print( which_arm, joint_name,  "dq",  dq[ joint_name ] )
+                    # print( which_arm, joint_name,  "q0",  q0[ which_arm ][ joint_name ] )
+                    # print( which_arm, joint_name, "dq0", dq0[ which_arm ][ joint_name ] )
+                    # print( which_arm, joint_name, "tau", tau[ which_arm ][ joint_name ] )
+
                 # if self.publish_data:
                 #     self.msg.q0_L[ j ]  =  q0_L[  left_name ]
                 #     self.msg.q_L[ j ]   =   q_L[  left_name ]
@@ -285,9 +293,10 @@ class JointImpedanceController( Controller ):
                 #     self.msg.q_R[ j ]   =   q_R[ right_name ]
                 #     self.msg.dq_R[ j ]  =  dq_R[ right_name ]
                 #     self.msg.tau_R[ j ] = tau_R[ right_name ]
-
+            #
             self.robot.arms[ "right" ].set_joint_torques( tau[ "right" ] )
             self.robot.arms[ "left"  ].set_joint_torques( tau[ "left"  ] )
+            control_rate.sleep()
 
     def move2pose( self, pose: dict ) :
         """
@@ -299,11 +308,12 @@ class JointImpedanceController( Controller ):
         pose_R = self.robot.get_arm_pose( "right" )
         pose_L = self.robot.get_arm_pose( "left"  )
 
-        pose2go_R = C.REST_POSE
-        pose2go_L = pose_right2left( C.REST_POSE )
+        pose2go_R = pose
+        pose2go_L = pose_right2left( pose )
 
-        self.add_movement( which_arm = "right" , pose_init = pose_R, pose_final = pose2go_R, duration = 4, toff = 1 )
-        self.add_movement( which_arm = "left"  , pose_init = pose_L, pose_final = pose2go_L, duration = 4, toff = 1 )
+
+        self.add_movement( which_arm = "right" , pose_init = pose_R, pose_final = pose2go_R, duration = 2, toff = 1 )
+        self.add_movement( which_arm = "left"  , pose_init = pose_L, pose_final = pose2go_L, duration = 2, toff = 1 )
 
         self.run( )
 
