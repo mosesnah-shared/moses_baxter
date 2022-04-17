@@ -9,7 +9,18 @@ class Constants:
 
     # =============================================================== #
     # Constant variables for running the simulation
+    CONTROLLER_DESCRIPTIONS = '''
+The available options for CTRL_TYPE are as follows:
 
+[1] joint_position_controller
+    - By using the internal Baxter functions, we can use pure joint position control of Baxter
+
+[2] joint_impedance_controller:
+    - We use a first-order impedance controller with gravity compensation
+
+[3] print_joint_controller
+    - You can freely move around the limbs and print the joint details by pressing "p" of the keyboard
+                              '''
 
     # The directory which saves all the simulation results
     SAVE_DIR      = "/home/baxterplayground/ros_ws/src/newmanlab_code/moses_baxter/results/"
@@ -86,9 +97,8 @@ class Constants:
                     'right_w1' :  0.3879126465,
                     'right_w2' : -1.5823011827 }
 
-
     MID_POSE = {    'right_s0' : 0.7869321442,
-                    'right_s1' : -0.3419854693,
+                    'right_s1' : -0.5419854693,
                     'right_e0' : -0.0149563127,
                     'right_e1' : 0.3097428536,
                     'right_w0' : -0.0464029188,
@@ -105,34 +115,34 @@ class Constants:
 
     # IMPEDANCE PARAMETERS
     # Case 1 - Stronger
-    JOINT_IMP_Kq_R  = { 'right_s0': 10.0,
+    JOINT_IMP_Kq_R  = { 'right_s0': 15.0,
                         'right_s1': 15.0,
-                        'right_e0':  5.0,
-                        'right_e1': 20.0,
+                        'right_e0':  8.0,
+                        'right_e1': 10.0,
                         'right_w0':  3.0,
                         'right_w1': 12.0,
                         'right_w2':  1.5 }
 
-    JOINT_IMP_Kq_L  = {  'left_s0': 10.0,
+    JOINT_IMP_Kq_L  = {  'left_s0': 15.0,
                          'left_s1': 15.0,
-                         'left_e0':  5.0,
-                         'left_e1': 20.0,
+                         'left_e0':  8.0,
+                         'left_e1': 10.0,
                          'left_w0':  3.0,
                          'left_w1': 12.0,
                          'left_w2':  1.5 }
 
-    JOINT_IMP_Bq_R  = { 'right_s0':  5.0,
+    JOINT_IMP_Bq_R  = { 'right_s0':  2.0,
                         'right_s1': 10.0,
                         'right_e0':  2.5,
-                        'right_e1':  7.5,
+                        'right_e1':  1.5,
                         'right_w0':  0.1,
                         'right_w1':  1.0,
                         'right_w2':  1.5  }
 
-    JOINT_IMP_Bq_L  ={   'left_s0':  5.0,
+    JOINT_IMP_Bq_L  ={   'left_s0':  2.0,
                          'left_s1': 10.0,
                          'left_e0':  2.5,
-                         'left_e1':  7.5,
+                         'left_e1':  1.5,
                          'left_w0':  0.1,
                          'left_w1':  1.0,
                          'left_w2':  1.5  }

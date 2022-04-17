@@ -75,12 +75,47 @@ class Controller( object ):
         """
             conduct pose2 - pose1 for each element
         """
+        assert which_arm in [ "right", "left" ]
+
         assert all( [ c in pose1.keys( ) for c in C.JOINT_NAMES[ which_arm ] ] )
         assert all( [ c in pose2.keys( ) for c in C.JOINT_NAMES[ which_arm ] ] )
 
         return { key: pose2[ key ] - pose1[ key ] for key in pose1.keys( ) }
 
 
+
+class PrintJointController( Controller ):
+    """
+        Printing out the joint values by moving around the limbs.
+
+        This controller is useful when we want to design the movements.
+    """
+    def __init__( self, robot ):
+
+        super().__init__( robot )
+        self.type  = "print_joint_controller"
+
+    def run( self ):
+
+        DONE = False
+        while not DONE:
+            typed_letter = baxter_external_devices.getch()
+
+            if typed_letter:
+
+                if typed_letter in ['\x1b', '\x03']:   #catch Esc or ctrl-c
+                    DONE = True
+                    rospy.signal_shutdown( "[LOG] EXITTING PRINT JOINT MODE.")
+
+                if typed_letter == "p":
+
+                    print( "=" * 100 )
+                    for limb_name in [ "right", "left" ]:
+                        joint_angles = self.robot.get_arm_pose( limb_name )
+
+                        for joint_name in C.JOINT_NAMES[ limb_name ]:
+                            print( "'{0}' : {1:.10f},".format( joint_name, joint_angles[ joint_name ] ) )
+                    print( "=" * 100 )
 
 class JointImpedanceController( Controller ):
     """
@@ -187,10 +222,10 @@ class JointImpedanceController( Controller ):
             tmpf = pose_final
 
             pi   = self.gen_dict( which_arm, np.zeros( 7 ) )                    # Zero initial posture
-            pf   = self.poses_delta( tmpi, tmpf )                               # Doing tmpf - tmpi
+            pf   = self.poses_delta( which_arm, tmpi, tmpf )                               # Doing tmpf - tmpi
             toff = toff
-            ti   = tf_prev + toff      if tf_prev + toff     >= 0 else 0
-            tf   = tf_prev + toff + D  if tf_prev + toff + D >= 0 else duration
+            ti   = tf_prev + toff             if tf_prev + toff            >= 0 else 0
+            tf   = tf_prev + toff + duration  if tf_prev + toff + duration >= 0 else duration
             D    = duration
 
 
@@ -438,6 +473,7 @@ class JointPositionController( Controller ):
         else:
             pass
 
+        self.reset( )
 
 
 class Baxter( object ):
@@ -498,7 +534,7 @@ class Baxter( object ):
         # Check whether the gripper is opened (100) or closed( 0 )
         # threshold value is simply 50
 
-        self.open_gripper( )
+        # self.open_gripper( )
         self.rs.enable()
 
         print( "[LOG] [INIT COMPLETE] Ctrl-c to quit" )
@@ -544,6 +580,7 @@ class Baxter( object ):
         self.grips[ "right" ].close(  block = False )
         self.grips[  "left" ].close(  block = False )
 
+
     # ---------------------------------------------------------------- #
     # ------------------------ BASIC FUNCTIONS ----------------------- #
     # ---------------------------------------------------------------- #
@@ -551,14 +588,10 @@ class Baxter( object ):
 
 def main():
 
-    parser  = argparse.ArgumentParser( formatter_class = argparse.RawDescriptionHelpFormatter )
+    parser  = argparse.ArgumentParser( formatter_class = argparse.RawTextHelpFormatter )
     parser.add_argument('-s', '--publish_data',
                         dest = 'publish_data',   action = 'store_true',
                         help = 'Save the Data')
-
-    parser.add_argument('-g', '--open_gripper',
-                        dest = 'open_gripper',    action = 'store_true',
-                        help = 'Open the gripper for the initialization')
 
     parser.add_argument('-o', '--run_optimization',
                         dest = 'is_run_optimization',    action = 'store_true',
@@ -566,7 +599,7 @@ def main():
 
     parser.add_argument('-c', '--controller',
                         dest = 'ctrl_type',    action = 'store', type = str,
-                        help = 'Controller type, joint_position_ctrl, joint_imp_ctrl')
+                        help = C.CONTROLLER_DESCRIPTIONS )
 
 
     args = parser.parse_args( rospy.myargv( )[ 1: ] )
@@ -574,9 +607,6 @@ def main():
     print( "Initializing node... " )
     rospy.init_node( "impedance_control_right" )
     my_baxter = Baxter( args )
-
-
-
     rospy.on_shutdown( my_baxter.clean_shutdown )
 
 
@@ -663,28 +693,49 @@ def main():
         # =============================================================== #
         # ================= JOINT POSITION CONTROLLER =================== #
         # =============================================================== #
-        # [1] If using JointPositionController Example movement
-        #     Uncomment the following codes to run JointPositionController
-        # my_ctrl = JointPositionController( my_baxter )
-        # my_ctrl.run_example( type = "default" )
+        if   args.ctrl_type == "joint_position_controller":
+            my_ctrl = JointPositionController( my_baxter )
+            my_ctrl.run_example( type = "default" )
 
 
         # =============================================================== #
         # ================= JOINT IMPEDANCE CONTROLLER ================== #
         # =============================================================== #
-        # [2] If using JointImpedanceController Example movement
-        #     Uncomment the following codes to run JointPositionController
-        my_ctrl = JointImpedanceController( my_baxter )
-        # my_ctrl.move2pose( C.GRASP_POSE, duration = 3, toff = 4 )
 
-        # Design the movements in detail
-        my_ctrl.add_movement( which_arm = "right", pose_init = my_ctrl.robot.get_arm_pose( "right" ), pose_final = C.GRASP_POSE, duration = 3, toff = 0 )
-        my_ctrl.add_movement( which_arm = "left" , pose_init = my_ctrl.robot.get_arm_pose( "left"  ), pose_final = C.GRASP_POSE, duration = 3, toff = 0 )
+        elif args.ctrl_type == "joint_impedance_controller":
+            my_ctrl = JointImpedanceController( my_baxter )
+            my_ctrl.move2pose( C.GRASP_POSE, duration = 3, toff = 2 )
 
-        my_ctrl.add_movement( which_arm = "right", pose_init = C.GRASP_POSE, pose_final = C.MID_POSE, duration = 3, toff = -1 )
-        my_ctrl.add_movement( which_arm = "left" , pose_init = C.GRASP_POSE, pose_final = C.MID_POSE, duration = 3, toff = -1 )
+            rospy.sleep( 5 )
+            my_baxter.close_gripper()
+            input( "Ready for optimization, press any key to continue" )
 
-        # my_ctrl.run( )
+            # # Design the movements in detail
+            POSE1_R = C.GRASP_POSE
+            POSE1_L = pose_right2left( C.GRASP_POSE  )
+
+            POSE2_R = C.MID_POSE
+            POSE2_L = pose_right2left( C.MID_POSE    )
+
+            POSE3_R = C.FINAL_POSE
+            POSE3_L = pose_right2left( C.FINAL_POSE  )
+            #
+            my_ctrl.add_movement( which_arm = "right", pose_init = POSE1_R, pose_final = POSE2_R, duration = 1.2, toff =  0.0 )
+            my_ctrl.add_movement( which_arm = "left" , pose_init = POSE1_L, pose_final = POSE2_L, duration = 1.2, toff =  0.0 )
+
+            my_ctrl.add_movement( which_arm = "right", pose_init = POSE2_R, pose_final = POSE3_R, duration = 0.8, toff = -0.2 )
+            my_ctrl.add_movement( which_arm = "left" , pose_init = POSE2_L, pose_final = POSE3_L, duration = 0.8, toff = -0.2 )
+
+            my_ctrl.run( )
+
+        # =============================================================== #
+        # ================== PRINT JOINT CONTROLLER ===================== #
+        # =============================================================== #
+
+        elif args.ctrl_type == "print_joint_controller":
+            my_ctrl = PrintJointController( my_baxter )
+            my_ctrl.run( )
+
 
 if __name__ == "__main__":
     main()
