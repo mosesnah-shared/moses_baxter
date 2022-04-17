@@ -296,12 +296,18 @@ class JointImpedanceController( Controller ):
             #
             self.robot.arms[ "right" ].set_joint_torques( tau[ "right" ] )
             self.robot.arms[ "left"  ].set_joint_torques( tau[ "left"  ] )
+
+            # [Moses C. Nah]
+            # DO NOT ERASE!! Erasing it will lead to unstable controller
             control_rate.sleep()
 
-    def move2pose( self, pose: dict ) :
+    def move2pose( self, pose: dict, duration: float, toff:float ) :
         """
             Symmetrically move both arms to the specific posture
+            The initial posture for this function is simply the curent posture, hence no need to specify the posture
         """
+        assert duration >= 0
+        assert toff     >= 0
         assert all( [ c in pose.keys(  ) for c in C.JOINT_NAMES[ "right" ] ] )
 
         # First, get the current position of right and left arm
@@ -311,11 +317,15 @@ class JointImpedanceController( Controller ):
         pose2go_R = pose
         pose2go_L = pose_right2left( pose )
 
-
-        self.add_movement( which_arm = "right" , pose_init = pose_R, pose_final = pose2go_R, duration = 2, toff = 1 )
-        self.add_movement( which_arm = "left"  , pose_init = pose_L, pose_final = pose2go_L, duration = 2, toff = 1 )
+        self.add_movement( which_arm = "right" , pose_init = pose_R, pose_final = pose2go_R, duration = duration, toff = 0 )
+        self.add_movement( which_arm = "left"  , pose_init = pose_L, pose_final = pose2go_L, duration = duration, toff = 0 )
 
         self.run( )
+
+        rospy.sleep( toff )
+
+        self.reset( ) # Once the movement is initiated, reset the whole data
+
 
 
 class JointPositionController( Controller ):
@@ -354,7 +364,6 @@ class JointPositionController( Controller ):
         assert all( [ c in pose2go.keys( ) for c in C.JOINT_NAMES[ which_arm ] ] )   # check whether the given dictionary has all the "right_" + s0, s1, e0, e1, w0, w1 and w2 on the keys.
         assert joint_vel >= 0 and joint_vel <= 1
         assert      toff >= 0
-
 
         # Generating the movement details
         move = dict( )
@@ -666,7 +675,16 @@ def main():
         # [2] If using JointImpedanceController Example movement
         #     Uncomment the following codes to run JointPositionController
         my_ctrl = JointImpedanceController( my_baxter )
-        my_ctrl.move2pose( C.REST_POSE )
+        # my_ctrl.move2pose( C.GRASP_POSE, duration = 3, toff = 4 )
+
+        # Design the movements in detail
+        my_ctrl.add_movement( which_arm = "right", pose_init = my_ctrl.robot.get_arm_pose( "right" ), pose_final = C.GRASP_POSE, duration = 3, toff = 0 )
+        my_ctrl.add_movement( which_arm = "left" , pose_init = my_ctrl.robot.get_arm_pose( "left"  ), pose_final = C.GRASP_POSE, duration = 3, toff = 0 )
+
+        my_ctrl.add_movement( which_arm = "right", pose_init = C.GRASP_POSE, pose_final = C.MID_POSE, duration = 3, toff = -1 )
+        my_ctrl.add_movement( which_arm = "left" , pose_init = C.GRASP_POSE, pose_final = C.MID_POSE, duration = 3, toff = -1 )
+
+        # my_ctrl.run( )
 
 if __name__ == "__main__":
     main()
