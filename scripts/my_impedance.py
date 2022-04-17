@@ -3,13 +3,14 @@
 # Source code from following:
 # [REF] https://github.com/tony1994513/Impedance-control/blob/master/impedcontol.py
 
-
-import argparse
+import sys
+import pdb
 import time
 import rospy
-import numpy as np
-import sys
 import nlopt
+import argparse
+import numpy             as np
+import matplotlib.pyplot as plt
 
 # BAXTER Libraries
 import baxter_interface
@@ -28,6 +29,27 @@ from my_utils     import GripperConnect, Logger
 # Local Library, customized messages
 from moses_baxter.msg import my_msg
 
+def pose_right2left( pose: dict ):
+    """
+        Changing the dictionary key's prefix name from "right_" to "left_", and flipping the sign too
+        The reason why we don't have left2right is because we will follow the "right-hand" convention,
+        meaning, all the constants in "my_constants.py" are saved as "right" hand informatino
+
+        Arguments:
+            [1] pose ( dict ): 7-element dictionary with keys "right_" + s0, s1, e0, e1, w0, w1, w2
+    """
+    assert all( [ c in pose.keys( ) for c in C.JOINT_NAMES[ "right" ] ] )   # check whether the given dictionary has all the "right_" + s0, s1, e0, e1, w0, w1 and w2 on the keys.
+
+    new_pose = dict( )
+
+    for right_name in C.JOINT_NAMES[ "right" ]:
+        left_name = C.RIGHT2LEFT[ right_name ]
+        new_pose[ left_name ] = C.LEFT_JOINT_SIGN[ left_name ] * pose[ right_name ]
+
+    return new_pose
+
+
+
 class Controller( object ):
     """
         Primitive Controller Object
@@ -44,7 +66,7 @@ class Controller( object ):
 
         new = dict( )
 
-        for i, joint_name in C.JOINT_NAMES[ which_arm ]:
+        for i, joint_name in enumerate( C.JOINT_NAMES[ which_arm ] ):
             new[ joint_name ] = arr[ i ]
 
         return new
@@ -59,23 +81,6 @@ class Controller( object ):
         return { key: pose2[ key ] - pose1[ key ] for key in pose1.keys( ) }
 
 
-    def pose_right2left( self, pose: dict ):
-        """
-            Changing the dictionary key's prefix name from "right_" to "left_", and flipping the sign too
-            The reason why we don't have left2right is because we will follow the "right-hand" convention
-
-            Arguments:
-                [1] pose ( dict ): 7-element dictionary with keys "right_" + s0, s1, e0, e1, w0, w1, w2
-        """
-        assert all( [ c in pose.keys( ) for c in C.JOINT_NAMES[ "right" ] ] )   # check whether the given dictionary has all the "right_" + s0, s1, e0, e1, w0, w1 and w2 on the keys.
-
-        new_pose = dict( )
-
-        for right_name in C.JOINT_NAMES[ "right" ]:
-            left_name = C.RIGHT2LEFT[ right_name ]
-            new_pose[ left_name ] = C.LEFT_JOINT_SIGN[ left_name ] * pose[ right_name ]
-
-        return new_pose
 
 class JointImpedanceController( Controller ):
     """
@@ -86,16 +91,16 @@ class JointImpedanceController( Controller ):
         tau_G, the gravity compensation torque is conducted by Baxter alone
     """
 
-    def __init__( self, robot, Kq : dict, Bq : dict ):
+    def __init__( self, robot ):
 
-
+        super().__init__( robot )
         self.type  = "joint_impedance_controller"
-        self.Kq    = Kq
-        self.Bq    = Bq
 
-        # Since the left and right moves can be conducted independently, also saving it independently
-        self.moves   = { "right" : [ ], "left" : [ ] }
-        self.n_moves = { "right" :   0, "left" :   0 }
+        # Since the left and right moves can be conducted independently, also saving the values independently
+        self.Kq      = { "right": C.JOINT_IMP_Kq_R , "left": C.JOINT_IMP_Kq_L }
+        self.Bq      = { "right": C.JOINT_IMP_Bq_R , "left": C.JOINT_IMP_Bq_L }
+        self.moves   = { "right":              [ ] , "left":              [ ] }
+        self.n_moves = { "right":                0 , "left":                0 }
 
     def min_jerk_traj( self, t: float, ti: float, tf: float, pi: float, pf: float, D: float ):
         """
@@ -144,8 +149,8 @@ class JointImpedanceController( Controller ):
             Arguments:
 
                 [1] which_arm  (str)   : either "right" or "left"
-                [2] pose_init  (dict)  : initial "right" posture of the ZTT (Zero-torque-trajectory)
-                [3] pose_final (dict)  : final   "right" posture of the ZTT (Zero-torque-trajectory)
+                [2] pose_init  (dict)  : initial "right" posture of the ZTT (Zero-torque-trajectory), note that if which_arm is "left", then should change pose from right2left
+                [3] pose_final (dict)  : final   "right" posture of the ZTT (Zero-torque-trajectory), note that if which_arm is "left", then should change pose from right2left
                 [4] duration   (float) : the    duration of the ZTT (Zero-torque-trajectory)
                 [5] toff       (float) : time offset with respect to the previous movements, can be negative value since it can overlap with the previous one
                                          If the movement is the first one (i.e., self.n_l_moves == 0 ), automatically set toff as zero.
@@ -154,31 +159,35 @@ class JointImpedanceController( Controller ):
 
         assert which_arm in [ "right", "left" ]
         assert duration >= 0
-        assert all( [ c in pose_init.keys(  ) for c in C.JOINT_NAMES[ "right" ] )
-        assert all( [ c in pose_final.keys( ) for c in C.JOINT_NAMES[ "right" ] )
+        assert all( [ c in pose_init.keys(  ) for c in C.JOINT_NAMES[ which_arm ] ] )
+        assert all( [ c in pose_final.keys( ) for c in C.JOINT_NAMES[ which_arm ] ] )
 
-        # Details of movement to add
         move = dict( )
 
-        if self.n_moves[ which_arm ] == 0:                                      # For the 1st position
+        if self.n_moves[ which_arm ] == 0:
+            """
+                For the first movement, toff and ti must be set as 0.
+            """
 
-            pi   = self.pose_right2left( pose_init  ) if which_arm == "left" else pose_init
-            pf   = self.pose_right2left( pose_final ) if which_arm == "left" else pose_final
+            pi   = pose_init
+            pf   = pose_final
             toff = 0
             ti   = 0
             tf   = duration
             D    = duration
 
         else:
-
+            """
+                For movements after the 2nd, we must save the poses_delta
+            """
             idx_prev = self.n_moves[ which_arm ] - 1                            # Index of the previous movement
             tf_prev  = self.moves[ which_arm ][ idx_prev ][ "tf" ]              # Getting the final time of the previous movement
 
-            tmpi = self.pose_right2left( pose_init  ) if which_arm == "left" else pose_init
-            tmpf = self.pose_right2left( pose_final ) if which_arm == "left" else pose_final
+            tmpi = pose_init
+            tmpf = pose_final
 
-            pi   = self.gen_dict( which_arm = "left", arr = np.zeros( 7 ) )     # Zero initial posture
-            pf   = self.delta_poses( tmpi, tmpf )                               # Doing tmpf - tmpi
+            pi   = self.gen_dict( which_arm, np.zeros( 7 ) )                    # Zero initial posture
+            pf   = self.poses_delta( tmpi, tmpf )                               # Doing tmpf - tmpi
             toff = toff
             ti   = tf_prev + toff      if tf_prev + toff     >= 0 else 0
             tf   = tf_prev + toff + D  if tf_prev + toff + D >= 0 else duration
@@ -222,21 +231,20 @@ class JointImpedanceController( Controller ):
 
     def run( self ):
 
-        assert self.n_moves[ C.RIGHT ] >= 1 or self.n_moves[ C.LEFT ] >= 1
+        assert self.n_moves[ "right" ] >= 1 or self.n_moves[ "left" ] >= 1
 
         # for safety purposes, set the control rate command timeout.
         # if the specified number of command cycles are missed, the robot will timeout and disable
         # Regardless of which_arm, setting both the left and right arm set_command
-        control_rate = rospy.Rate( self.rate )             # set control rate
+        control_rate = rospy.Rate( self.robot.rate )             # set control rate
 
-        self.robot.arms[ C.RIGHT ].set_command_timeout( ( 1.0 / self.rate ) * self.missed_cmds )
-        self.robot.arms[ C.LEFT  ].set_command_timeout( ( 1.0 / self.rate ) * self.missed_cmds )
-
+        self.robot.arms[ "right" ].set_command_timeout( ( 1.0 / self.robot.rate ) * self.robot.missed_cmds )
+        self.robot.arms[ "left"  ].set_command_timeout( ( 1.0 / self.robot.rate ) * self.robot.missed_cmds )
 
         # The initial time for the simulation
         ts = rospy.Time.now( )
-
-        while not rospy.is_shutdown( ):
+        t  = 0
+        while not rospy.is_shutdown( ) or t <= 20:
 
             if not self.robot.rs.state( ).enabled:
                 rospy.logerr( "Impedance example failed to meet, specified control rate timeout." )
@@ -245,13 +253,13 @@ class JointImpedanceController( Controller ):
             # The elapsed time
             t = ( rospy.Time.now( ) - ts ).to_sec( )
 
-            q0_R, dq0_R = self.get_reference_traj( which_arm = "right", t )
-            q0_L, dq0_L = self.get_reference_traj( which_arm = "left" , t )
+            q0_R, dq0_R = self.get_reference_traj( which_arm = "right",  t = t )
+            q0_L, dq0_L = self.get_reference_traj( which_arm = "left" ,  t = t )
 
             q0  = { "right": q0_R , "left": q0_L  }
-            dq0 = { "right", dq0_R, "left": dq0_L }
-            tau = { "right": self.gen_dict( which_arm = "right", np.zeros( 7 ) ),
-                     "left": self.gen_dict( which_arm =  "left", np.zeros( 7 ) }
+            dq0 = { "right": dq0_R, "left": dq0_L }
+            tau = { "right": self.gen_dict( "right", np.zeros( 7 ) ) ,
+                     "left": self.gen_dict( "left" , np.zeros( 7 ) ) }
 
             for which_arm in [ "right", "left" ]:
 
@@ -259,23 +267,45 @@ class JointImpedanceController( Controller ):
                 if self.n_moves[ which_arm ] == 0:
                     continue
 
+                # Get current position and velocities of the joints
+                q  = self.robot.get_arm_pose(     which_arm )
+                dq = self.robot.get_arm_velocity( which_arm )
+
                 for joint_name in C.JOINT_NAMES[ which_arm ]:
-                    tau[ which_arm ][ joint_name ]  =  self.Kq[ which_arm ][ joint_name ] * (  q0[ which_arm ][ joint_name ] -  q[ which_arm ][ joint_name )
-                    tau[ which_arm ][ joint_name ] +=  self.Bq[ which_arm ][ joint_name ] * ( dq0[ which_arm ][ joint_name ] - dq[ which_arm ][ joint_name )
+                    tau[ which_arm ][ joint_name ]  =  self.Kq[ which_arm ][ joint_name ] * (  q0[ which_arm ][ joint_name ] -  q[ joint_name ] )
+                    tau[ which_arm ][ joint_name ] +=  self.Bq[ which_arm ][ joint_name ] * ( dq0[ which_arm ][ joint_name ] - dq[ joint_name ] )
 
-                if self.publish_data:
-                    self.msg.q0_L[ j ]  =  q0_L[  left_name ]
-                    self.msg.q_L[ j ]   =   q_L[  left_name ]
-                    self.msg.dq_L[ j ]  =  dq_L[  left_name ]
-                    self.msg.tau_L[ j ] = tau_L[  left_name ]
+                # if self.publish_data:
+                #     self.msg.q0_L[ j ]  =  q0_L[  left_name ]
+                #     self.msg.q_L[ j ]   =   q_L[  left_name ]
+                #     self.msg.dq_L[ j ]  =  dq_L[  left_name ]
+                #     self.msg.tau_L[ j ] = tau_L[  left_name ]
+                #
+                #     self.msg.q0_R[ j ]  =  q0_R[ right_name ]
+                #     self.msg.q_R[ j ]   =   q_R[ right_name ]
+                #     self.msg.dq_R[ j ]  =  dq_R[ right_name ]
+                #     self.msg.tau_R[ j ] = tau_R[ right_name ]
 
-                    self.msg.q0_R[ j ]  =  q0_R[ right_name ]
-                    self.msg.q_R[ j ]   =   q_R[ right_name ]
-                    self.msg.dq_R[ j ]  =  dq_R[ right_name ]
-                    self.msg.tau_R[ j ] = tau_R[ right_name ]
+            self.robot.arms[ "right" ].set_joint_torques( tau[ "right" ] )
+            self.robot.arms[ "left"  ].set_joint_torques( tau[ "left"  ] )
 
-                self.robot.arms[ "right" ].set_joint_torques( tau[ "right" ] )
-                self.robot.arms[ "left"  ].set_joint_torques( tau[ "left"  ] )
+    def move2pose( self, pose: dict ) :
+        """
+            Symmetrically move both arms to the specific posture
+        """
+        assert all( [ c in pose.keys(  ) for c in C.JOINT_NAMES[ "right" ] ] )
+
+        # First, get the current position of right and left arm
+        pose_R = self.robot.get_arm_pose( "right" )
+        pose_L = self.robot.get_arm_pose( "left"  )
+
+        pose2go_R = C.REST_POSE
+        pose2go_L = pose_right2left( C.REST_POSE )
+
+        self.add_movement( which_arm = "right" , pose_init = pose_R, pose_final = pose2go_R, duration = 4, toff = 1 )
+        self.add_movement( which_arm = "left"  , pose_init = pose_L, pose_final = pose2go_L, duration = 4, toff = 1 )
+
+        self.run( )
 
 
 class JointPositionController( Controller ):
@@ -304,24 +334,22 @@ class JointPositionController( Controller ):
 
             Arguments:
                 [1] which_arm (str)   : Either "right" or "left"
-                [2] pose2go   (dict)  : Keys "right_" + s0, s1, e0, e1, w0, w1, w2 with corresponding values.
-                                        In case if which_arm is left, should change prefix "right" to "left"
+                [2] pose2go   (dict)  : Keys "which_arm" + s0, s1, e0, e1, w0, w1, w2 with corresponding values.
+                                        Note that the keys between "which_arm" and "pose2go" should match each other.
                 [3] joint_vel (float) : Ranged (0,1) and argument for "set_joint_position_speed" method
                 [4] toff      (float) : time offset with respect to the previous movements, must be nonnegative
         """
 
         assert which_arm in [ "right", "left" ]
-        assert all( [ c in pose2go.keys( ) for c in C.JOINT_NAMES[ "right" ] ] )   # check whether the given dictionary has all the "right_" + s0, s1, e0, e1, w0, w1 and w2 on the keys.
+        assert all( [ c in pose2go.keys( ) for c in C.JOINT_NAMES[ which_arm ] ] )   # check whether the given dictionary has all the "right_" + s0, s1, e0, e1, w0, w1 and w2 on the keys.
         assert joint_vel >= 0 and joint_vel <= 1
         assert      toff >= 0
 
-        # If which_arm is LEFT, change the pose2go to "left" pose (mirror image)
-        pose = self.pose_right2left( pose2go ) if which_arm == "left" else pose2go
 
         # Generating the movement details
         move = dict( )
         move[ "which_arm" ] = which_arm
-        move[ "pose"      ] = pose
+        move[ "pose"      ] = pose2go
         move[ "joint_vel" ] = joint_vel
         move[ "toff"      ] = toff
 
@@ -354,6 +382,43 @@ class JointPositionController( Controller ):
             self.robot.arms[ which_arm ].set_joint_position_speed( vel )
             self.robot.arms[ which_arm ].move_to_joint_positions( pose )
             rospy.sleep( toff )
+
+
+    def run_example( self, type = "default" ):
+        """
+            Just some simple repertoire for this controller
+        """
+
+        if   type == "default":
+
+            # All the constants are saved in "right" hand, hence should parse the movements a bit
+
+            POSE1_R = C.GRASP_POSE
+            POSE1_L = pose_right2left( C.GRASP_POSE )
+
+            self.add_movement( which_arm = "right" , pose2go = POSE1_R, joint_vel = 0.2, toff = 5 )
+            self.add_movement( which_arm = "left"  , pose2go = POSE1_L, joint_vel = 0.2, toff = 5 )
+
+            POSE2_R = C.LIFT_POSE
+            POSE2_L = pose_right2left( C.LIFT_POSE )
+
+            self.add_movement( which_arm = "left"  , pose2go = POSE2_L , joint_vel = 0.2, toff = 5 )
+            self.add_movement( which_arm = "right" , pose2go = POSE2_R , joint_vel = 0.2, toff = 5 )
+
+            POSE3_R = C.FINAL_POSE
+            POSE3_L = pose_right2left( C.FINAL_POSE )
+
+            self.add_movement( which_arm = "right" , pose2go = POSE3_R, joint_vel = 0.2, toff = 5 )
+            self.add_movement( which_arm = "left"  , pose2go = POSE3_L, joint_vel = 0.2, toff = 5 )
+
+            self.run( )
+
+        elif type == "swing":
+            pass
+
+        else:
+            pass
+
 
 
 class Baxter( object ):
@@ -569,71 +634,29 @@ def main():
         opt.set_stopval( -1    )                                                # If value is within 98~100% (i.e., 0~2%)
         xopt = opt.optimize( init )                                             # Start at the mid-point of the lower and upper bound
 
+
+    # ============================================================================= #
+    # ============================= NORMAL EXECUTION ============================== #
     # ============================================================================= #
 
     elif not args.is_run_optimization:
 
-        # Can get the value via rosparam
-
-        # ==================================================================================================== #
-        # [Step #1] Setting the gripper
-        # ==================================================================================================== #
-
-        # Adding baxter to the controller that we are using
-        my_ctrl = JointPositionController( my_baxter )
-
-        # Adding the details of the movements to be sequentially conducted
-        my_ctrl.add_movement( which_arm = "right" , pose2go = C.GRASP_POSE, joint_vel = 0.2, toff = 5 )
-        my_ctrl.add_movement( which_arm = "left"  , pose2go = C.GRASP_POSE, joint_vel = 0.2, toff = 5 )
-        my_ctrl.add_movement( which_arm = "left"  , pose2go = C.LIFT_POSE , joint_vel = 0.2, toff = 5 )
-        my_ctrl.add_movement( which_arm = "right" , pose2go = C.LIFT_POSE , joint_vel = 0.2, toff = 5 )
-        my_ctrl.add_movement( which_arm = "right" , pose2go = C.FINAL_POSE, joint_vel = 0.2, toff = 5 )
-        my_ctrl.add_movement( which_arm = "left"  , pose2go = C.FINAL_POSE , joint_vel = 0.2, toff = 5 )
-
-        # Initiating the movement
-        my_ctrl.run( )
-
-        exit( )
-
-        # In case for an impedance controller
-        my_ctrl = JointImpedanceController( my_baxter, C.JOINT_IMP_Kq, C.JOINT_IMP_Bq )
-
-        exit( )
-
-        my_baxter.close_gripper( )
+        # =============================================================== #
+        # ================= JOINT POSITION CONTROLLER =================== #
+        # =============================================================== #
+        # [1] If using JointPositionController Example movement
+        #     Uncomment the following codes to run JointPositionController
+        # my_ctrl = JointPositionController( my_baxter )
+        # my_ctrl.run_example( type = "default" )
 
 
-        opt_pars = [-0.55, 1., -1.15555556, 0.9, 0.9, 0.5]
-        pose = my_baxter.tmp_pose_gen( opt_pars[ 0:3 ] )
-
-
-
-
-        input( "Ready for optimization, press any key to continue" )
-
-
-        my_baxter.joint_impedance(  C.BOTH, [ C.GRASP_POSE, pose , C.FINAL_POSE ] , Ds = [ opt_pars[ 3 ], opt_pars[ 4 ] ], toffs = [ opt_pars[ 5 ], 8 ]  )
-        # my_baxter.control_gripper( mode = "timer" )
-
-        # ==================================================================================================== #
-        # [Step #2] Initiate the movement
-        # ==================================================================================================== #
-
-        rospy.sleep( 10 )
-
-        # my_baxter.joint_impedance(  C.BOTH, [ C.GRASP_POSE, C.MID_POSE, C.FINAL_POSE  ] , Ds = [1.0, 1.0], toffs = [0.1, 2.0]  )
-
-        # my_baxter.joint_impedance(  C.BOTH, [ C.GRASP_POSE, C.LIFT_POSE   ], Ds = 5, toffs = [1]  )
-        # my_baxter.joint_impedance(  C.BOTH, [ C.LIFT_POSE , C.GRASP_POSE  ], Ds = 5, toffs = [1]  )
-
-
-
-        # my_baxter.move2pose( C.LEFT , C.GRASP_POSE, wait_time = 2, joint_speed = 0.2 )
-        # my_baxter.joint_impedance(  C.BOTH, [ C.GRASP_POSE, C.MID_POSE, C.FINAL_POSE  ] , Ds = [1.0, 1.0], toffs = [0.1, 2.0]  )
-        # my_baxter.joint_impedance(  C.BOTH, [ C.GRASP_POSE, C.MID_POSE  ] , Ds = [1.0], toffs = [2.0]  )
-
-
-
+        # =============================================================== #
+        # ================= JOINT IMPEDANCE CONTROLLER ================== #
+        # =============================================================== #
+        # [2] If using JointImpedanceController Example movement
+        #     Uncomment the following codes to run JointPositionController
+        my_ctrl = JointImpedanceController( my_baxter )
+        my_ctrl.move2pose( C.REST_POSE )
 
 if __name__ == "__main__":
     main()

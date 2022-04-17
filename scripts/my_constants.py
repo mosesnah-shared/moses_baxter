@@ -105,21 +105,37 @@ class Constants:
 
     # IMPEDANCE PARAMETERS
     # Case 1 - Stronger
-    JOINT_IMP_Kq  = { 'right_s0': 10.0,
-                      'right_s1': 15.0,
-                      'right_e0':  5.0,
-                      'right_e1': 20.0,
-                      'right_w0':  3.0,
-                      'right_w1': 12.0,
-                      'right_w2':  1.5 }
+    JOINT_IMP_Kq_R  = { 'right_s0': 10.0,
+                        'right_s1': 15.0,
+                        'right_e0':  5.0,
+                        'right_e1': 20.0,
+                        'right_w0':  3.0,
+                        'right_w1': 12.0,
+                        'right_w2':  1.5 }
 
-    JOINT_IMP_Bq  = { 'right_s0':  5.0,
-                      'right_s1': 10.0,
-                      'right_e0':  2.5,
-                      'right_e1':  7.5,
-                      'right_w0':  0.1,
-                      'right_w1':  1.0,
-                      'right_w2':  1.5  }
+    JOINT_IMP_Kq_L  = {  'left_s0': 10.0,
+                         'left_s1': 15.0,
+                         'left_e0':  5.0,
+                         'left_e1': 20.0,
+                         'left_w0':  3.0,
+                         'left_w1': 12.0,
+                         'left_w2':  1.5 }
+
+    JOINT_IMP_Bq_R  = { 'right_s0':  5.0,
+                        'right_s1': 10.0,
+                        'right_e0':  2.5,
+                        'right_e1':  7.5,
+                        'right_w0':  0.1,
+                        'right_w1':  1.0,
+                        'right_w2':  1.5  }
+
+    JOINT_IMP_Bq_L  ={   'left_s0':  5.0,
+                         'left_s1': 10.0,
+                         'left_e0':  2.5,
+                         'left_e1':  7.5,
+                         'left_w0':  0.1,
+                         'left_w1':  1.0,
+                         'left_w2':  1.5  }
 
 
     # # Case 1 - original 2022.01.28
