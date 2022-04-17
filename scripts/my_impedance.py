@@ -1,7 +1,13 @@
 #!/usr/bin/python3
 
-# Source code from following:
-# [REF] https://github.com/tony1994513/Impedance-control/blob/master/impedcontol.py
+"""
+# =========================================================== #
+# [Author            ] Moses C. Nah
+# [Email             ] mosesnah@mit.edu
+# [Date Created      ] 2022.01.26
+# [Last Modification ] 2022.04.17
+# =========================================================== #
+"""
 
 import sys
 import pdb
@@ -83,7 +89,6 @@ class Controller( object ):
         return { key: pose2[ key ] - pose1[ key ] for key in pose1.keys( ) }
 
 
-
 class PrintJointController( Controller ):
     """
         Printing out the joint values by moving around the limbs.
@@ -126,16 +131,22 @@ class JointImpedanceController( Controller ):
         tau_G, the gravity compensation torque is conducted by Baxter alone
     """
 
-    def __init__( self, robot ):
+    def __init__( self, robot, is_save_data = False ):
 
         super().__init__( robot )
-        self.type  = "joint_impedance_controller"
+        self.type          = "joint_impedance_controller"
+        self.is_save_data  = is_save_data
 
         # Since the left and right moves can be conducted independently, also saving the values independently
         self.Kq      = { "right": C.JOINT_IMP_Kq_R , "left": C.JOINT_IMP_Kq_L }
         self.Bq      = { "right": C.JOINT_IMP_Bq_R , "left": C.JOINT_IMP_Bq_L }
         self.moves   = { "right":              [ ] , "left":              [ ] }
         self.n_moves = { "right":                0 , "left":                0 }
+
+        if self.is_save_data:
+            self.pub    = rospy.Publisher( 'my_baxter' , my_msg ) # The publisher of my message
+            self.msg    = my_msg()
+            self.msg.on = False
 
     def min_jerk_traj( self, t: float, ti: float, tf: float, pi: float, pf: float, D: float ):
         """
@@ -291,12 +302,15 @@ class JointImpedanceController( Controller ):
             q0_R, dq0_R = self.get_reference_traj( which_arm = "right",  t = t )
             q0_L, dq0_L = self.get_reference_traj( which_arm = "left" ,  t = t )
 
+            q   = { "right": None , "left": None  }
+            dq  = { "right": None , "left": None  }
             q0  = { "right": q0_R , "left": q0_L  }
             dq0 = { "right": dq0_R, "left": dq0_L }
             tau = { "right": self.gen_dict( "right", np.zeros( 7 ) ) ,
                      "left": self.gen_dict( "left" , np.zeros( 7 ) ) }
 
-            # print( "time", t)
+            if self.is_save_data:
+                self.msg.on = True
 
             for which_arm in [ "right" , "left" ]:
 
@@ -305,36 +319,49 @@ class JointImpedanceController( Controller ):
                     continue
 
                 # Get current position and velocities of the joints
-                q  = self.robot.get_arm_pose(     which_arm )
-                dq = self.robot.get_arm_velocity( which_arm )
+                q[ which_arm  ] = self.robot.get_arm_pose(     which_arm )
+                dq[ which_arm ] = self.robot.get_arm_velocity( which_arm )
 
                 for joint_name in C.JOINT_NAMES[ which_arm ]:
-                    tau[ which_arm ][ joint_name ]  =  self.Kq[ which_arm ][ joint_name ] * (  q0[ which_arm ][ joint_name ] -  q[ joint_name ] )
-                    tau[ which_arm ][ joint_name ] +=  self.Bq[ which_arm ][ joint_name ] * ( dq0[ which_arm ][ joint_name ] - dq[ joint_name ] )
+                    tau[ which_arm ][ joint_name ]  =  self.Kq[ which_arm ][ joint_name ] * (  q0[ which_arm ][ joint_name ] -  q[ which_arm ][ joint_name ] )
+                    tau[ which_arm ][ joint_name ] +=  self.Bq[ which_arm ][ joint_name ] * ( dq0[ which_arm ][ joint_name ] - dq[ which_arm ][ joint_name ] )
 
-                    # print( which_arm, joint_name,   "q",   q[ joint_name ] )
-                    # print( which_arm, joint_name,  "dq",  dq[ joint_name ] )
-                    # print( which_arm, joint_name,  "q0",  q0[ which_arm ][ joint_name ] )
-                    # print( which_arm, joint_name, "dq0", dq0[ which_arm ][ joint_name ] )
-                    # print( which_arm, joint_name, "tau", tau[ which_arm ][ joint_name ] )
+                if self.is_save_data:
+                    # Sadly, we need to use multiplelines to publish the data.
+                    # 2D array will be useful, but we use 1D array which is
+                    self.msg.stamp      = t
 
-                # if self.publish_data:
-                #     self.msg.q0_L[ j ]  =  q0_L[  left_name ]
-                #     self.msg.q_L[ j ]   =   q_L[  left_name ]
-                #     self.msg.dq_L[ j ]  =  dq_L[  left_name ]
-                #     self.msg.tau_L[ j ] = tau_L[  left_name ]
-                #
-                #     self.msg.q0_R[ j ]  =  q0_R[ right_name ]
-                #     self.msg.q_R[ j ]   =   q_R[ right_name ]
-                #     self.msg.dq_R[ j ]  =  dq_R[ right_name ]
-                #     self.msg.tau_R[ j ] = tau_R[ right_name ]
-            #
+                    if   which_arm == "left":
+                        for j, joint_name in enumerate( C.JOINT_NAMES[ "left" ] ):
+                            self.msg.q0_L[ j  ] =   q0[ "left"  ][ joint_name ]
+                            self.msg.dq0_L[ j ] =  dq0[ "left"  ][ joint_name ]
+                            self.msg.q_L[ j   ] =    q[ "left"  ][ joint_name ]
+                            self.msg.dq_L[ j  ] =   dq[ "left"  ][ joint_name ]
+                            self.msg.tau_L[ j ] =  tau[ "left"  ][ joint_name ]
+
+                    elif which_arm == "right":
+                        for j, joint_name in enumerate( C.JOINT_NAMES[ "right" ] ):
+                            self.msg.q0_R[ j ]  =   q0[ "right" ][ joint_name ]
+                            self.msg.dq0_R[ j ] =  dq0[ "right" ][ joint_name ]
+                            self.msg.q_R[ j ]   =    q[ "right" ][ joint_name ]
+                            self.msg.dq_R[ j ]  =   dq[ "right" ][ joint_name ]
+                            self.msg.tau_R[ j ] =  tau[ "right" ][ joint_name ]
+                    else:
+                        pass
+
             self.robot.arms[ "right" ].set_joint_torques( tau[ "right" ] )
             self.robot.arms[ "left"  ].set_joint_torques( tau[ "left"  ] )
 
             # [Moses C. Nah]
             # DO NOT ERASE!! Erasing it will lead to unstable controller
             control_rate.sleep()
+
+            if self.is_save_data:
+                self.pub.publish( self.msg )
+
+        # Turn off message if done.
+        if self.is_save_data:
+            self.msg.on = False
 
     def move2pose( self, pose: dict, duration: float, toff:float ) :
         """
@@ -360,7 +387,6 @@ class JointImpedanceController( Controller ):
         rospy.sleep( toff )
 
         self.reset( ) # Once the movement is initiated, reset the whole data
-
 
 
 class JointPositionController( Controller ):
@@ -446,7 +472,6 @@ class JointPositionController( Controller ):
         if   type == "default":
 
             # All the constants are saved in "right" hand, hence should parse the movements a bit
-
             POSE1_R = C.GRASP_POSE
             POSE1_L = pose_right2left( C.GRASP_POSE )
 
@@ -485,8 +510,6 @@ class Baxter( object ):
     def __init__( self, args ):
 
         self.args         = args
-        self.publish_data = args.publish_data     # Boolean, data saved
-                                                  # Just define the whole arms in the first place to simplify the code
         self.arms         = dict( )
         self.kins         = dict( )
         self.grips        = dict( )
@@ -548,8 +571,6 @@ class Baxter( object ):
 
         if not self.init_state and self.rs.state().enabled:
 
-            self.msg.on = False
-            self.pub.publish( self.msg )
             self.rs.disable()
 
     # ---------------------------------------------------------------- #
@@ -589,8 +610,8 @@ class Baxter( object ):
 def main():
 
     parser  = argparse.ArgumentParser( formatter_class = argparse.RawTextHelpFormatter )
-    parser.add_argument('-s', '--publish_data',
-                        dest = 'publish_data',   action = 'store_true',
+    parser.add_argument('-s', '--save_data',
+                        dest = 'save_data',   action = 'store_true',
                         help = 'Save the Data')
 
     parser.add_argument('-o', '--run_optimization',
@@ -703,12 +724,12 @@ def main():
         # =============================================================== #
 
         elif args.ctrl_type == "joint_impedance_controller":
-            my_ctrl = JointImpedanceController( my_baxter )
+            my_ctrl = JointImpedanceController( my_baxter, is_save_data = args.save_data )
             my_ctrl.move2pose( C.GRASP_POSE, duration = 3, toff = 2 )
 
-            rospy.sleep( 5 )
-            my_baxter.close_gripper()
-            input( "Ready for optimization, press any key to continue" )
+            # rospy.sleep( 5 )
+            # my_baxter.close_gripper()
+            # input( "Ready for optimization, press any key to continue" )
 
             # # Design the movements in detail
             POSE1_R = C.GRASP_POSE
@@ -720,12 +741,12 @@ def main():
             POSE3_R = C.FINAL_POSE
             POSE3_L = pose_right2left( C.FINAL_POSE  )
             #
-            my_ctrl.add_movement( which_arm = "right", pose_init = POSE1_R, pose_final = POSE2_R, duration = 1.2, toff =  0.0 )
-            my_ctrl.add_movement( which_arm = "left" , pose_init = POSE1_L, pose_final = POSE2_L, duration = 1.2, toff =  0.0 )
-
-            my_ctrl.add_movement( which_arm = "right", pose_init = POSE2_R, pose_final = POSE3_R, duration = 0.8, toff = -0.2 )
-            my_ctrl.add_movement( which_arm = "left" , pose_init = POSE2_L, pose_final = POSE3_L, duration = 0.8, toff = -0.2 )
-
+            my_ctrl.add_movement( which_arm = "right", pose_init = POSE1_R, pose_final = POSE2_R, duration = 1.4, toff =  0.0 )
+            my_ctrl.add_movement( which_arm = "left" , pose_init = POSE1_L, pose_final = POSE2_L, duration = 1.4, toff =  0.0 )
+            #
+            my_ctrl.add_movement( which_arm = "right", pose_init = POSE2_R, pose_final = POSE3_R, duration = 1.0, toff = -0.4 )
+            my_ctrl.add_movement( which_arm = "left" , pose_init = POSE2_L, pose_final = POSE3_L, duration = 1.0, toff = -0.4 )
+            #
             my_ctrl.run( )
 
         # =============================================================== #

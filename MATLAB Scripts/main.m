@@ -15,10 +15,8 @@ my_fig_config(  'fontsize',  20, ...
                'markerSize',  25 );   
     
 %% (--) Read Data
-result_dir = "../results/";
-
-file_name  = "chatter_effect.txt";
-
+result_dir = "../results/2022_04_17/";
+file_name  = "20220417_172911.txt";
 
 file_name  = result_dir + file_name;
 
@@ -30,8 +28,15 @@ N = 20000; % Defining the size of the array
 raw_data.qo_L.time  = nan( 1,  N );
 raw_data.qo_L.value = nan( 7,  N );
 
+raw_data.dqo_L.time  = nan( 1,  N );
+raw_data.dqo_L.value = nan( 7,  N );
+
 raw_data.qo_R.time  = nan( 1,  N );
 raw_data.qo_R.value = nan( 7,  N );
+
+raw_data.dqo_R.time  = nan( 1,  N );
+raw_data.dqo_R.value = nan( 7,  N );
+
 
 raw_data.q_L.time   = nan( 1,  N );
 raw_data.q_L.value  = nan( 7,  N );
@@ -51,8 +56,8 @@ raw_data.tau_L.value = nan( 7,  N );
 raw_data.tau_R.time  = nan( 1,  N );
 raw_data.tau_R.value = nan( 7,  N );
 
-idx = ones( 1, 8 );
-str_idx = [ "tau_R", "tau_L", "dq_R", "dq_L", "q_L", "q_R", "qo_R", "qo_L" ];
+str_idx = [ "tau_R", "tau_L", "dq_R", "dq_L", "q_L", "q_R", "qo_R", "qo_L", "dqo_L", "dqo_R" ];
+idx = ones( 1, length( str_idx ) );
 
 %%
 
@@ -100,11 +105,17 @@ end
  %% Plotting the ZFT and actual
 % Index 2, 4 and 6 are s1, e1, w1, right hand
 
+f = figure; a = axes( 'parent', f );
+hold on
+plot(  raw_data.q_R.time,  raw_data.q_R.value( 2, : ), 'o', 'markersize', 10, 'parent', a )
+plot( raw_data.qo_R.time, raw_data.qo_R.value( 2, : ), 'o',  'markersize', 10,'parent', a )
+
 % f = figure; a = axes( 'parent', f );
 % hold on
-% title( "shoulder" )
-% plot(  raw_data.q_R.time,  raw_data.q_R.value( 2, : ), 'parent', a )
-% plot( raw_data.qo_R.time, raw_data.qo_R.value( 2, : ), 'parent', a )
+% plot(  raw_data.q_L.time,  raw_data.q_L.value( 1, : ), 'parent', a )
+% plot( raw_data.qo_L.time, raw_data.qo_L.value( 1, : ), 'parent', a )
+
+%%
 % 
 % 
 % f = figure; a = axes( 'parent', f );
@@ -117,15 +128,15 @@ end
 f = figure; a = axes( 'parent', f );
 hold on
 title( "wrist" ) 
-Ni = 1100;
+% Ni = 1100;
 
 % for i = 1 : 7
 
-plot(  raw_data.q_L.time( Ni : end ),  raw_data.dq_L.value( 6, Ni:end ), 'parent', a , 'color', [0.8500 0.3250 0.0980] )
-plot(  raw_data.q_L.time( Ni : end ),  raw_data.tau_L.value( 6, Ni:end ), 'parent', a, 'color', [0.4940 0.1840 0.5560] )
+% plot(  raw_data.q_L.time( Ni : end ),  raw_data.dq_L.value( 6, Ni:end ), 'parent', a , 'color', [0.8500 0.3250 0.0980] )
+% plot(  raw_data.q_L.time( Ni : end ),  raw_data.tau_L.value( 6, Ni:end ), 'parent', a, 'color', [0.4940 0.1840 0.5560] )
 
 % end
-set( a, 'xlim', [ raw_data.q_L.time( Ni ), max( raw_data.q_L.time ) ] )
+% set( a, 'xlim', [ raw_data.q_L.time( Ni ), max( raw_data.q_L.time ) ] )
 set( a, 'fontsize', 40)
 
 
