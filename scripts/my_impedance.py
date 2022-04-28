@@ -137,11 +137,16 @@ class JointImpedanceController( Controller ):
         self.type          = "joint_impedance_controller"
         self.is_save_data  = is_save_data
 
+        a   = 0.15 # The ratio between stiffness and dampling
+        BqR = { key : a * val for key, val in C.JOINT_IMP_Kq_R.items() }
+        BqL = { key : a * val for key, val in C.JOINT_IMP_Kq_L.items() }
+
         # Since the left and right moves can be conducted independently, also saving the values independently
         self.Kq      = { "right": C.JOINT_IMP_Kq_R , "left": C.JOINT_IMP_Kq_L }
-        self.Bq      = { "right": C.JOINT_IMP_Bq_R , "left": C.JOINT_IMP_Bq_L }
-        self.moves   = { "right":              [ ] , "left":              [ ] }
-        self.n_moves = { "right":                0 , "left":                0 }
+        self.Bq      = { "right": BqR, "left": BqL }
+        self.moves   = { "right": [ ], "left": [ ] }
+        self.n_moves = { "right":   0, "left":   0 }
+
 
         if self.is_save_data:
             self.pub    = rospy.Publisher( 'my_baxter' , my_msg ) # The publisher of my message
@@ -725,7 +730,7 @@ def main():
 
         elif args.ctrl_type == "joint_impedance_controller":
             my_ctrl = JointImpedanceController( my_baxter, is_save_data = args.save_data )
-            my_ctrl.move2pose( C.GRASP_POSE, duration = 3, toff = 2 )
+            my_ctrl.move2pose( C.GRASP_POSE, duration = 3, toff = 1 )
 
             # rospy.sleep( 5 )
             # my_baxter.close_gripper()
@@ -741,11 +746,11 @@ def main():
             POSE3_R = C.FINAL_POSE
             POSE3_L = pose_right2left( C.FINAL_POSE  )
             #
-            my_ctrl.add_movement( which_arm = "right", pose_init = POSE1_R, pose_final = POSE2_R, duration = 1.4, toff =  0.0 )
-            my_ctrl.add_movement( which_arm = "left" , pose_init = POSE1_L, pose_final = POSE2_L, duration = 1.4, toff =  0.0 )
+            my_ctrl.add_movement( which_arm = "right", pose_init = POSE1_R, pose_final = POSE2_R, duration = 1.7, toff =  0.0 )
+            my_ctrl.add_movement( which_arm = "left" , pose_init = POSE1_L, pose_final = POSE2_L, duration = 1.7, toff =  0.0 )
             #
-            my_ctrl.add_movement( which_arm = "right", pose_init = POSE2_R, pose_final = POSE3_R, duration = 1.0, toff = -0.4 )
-            my_ctrl.add_movement( which_arm = "left" , pose_init = POSE2_L, pose_final = POSE3_L, duration = 1.0, toff = -0.4 )
+            my_ctrl.add_movement( which_arm = "right", pose_init = POSE2_R, pose_final = POSE3_R, duration = 1.8, toff = -0.5 )
+            my_ctrl.add_movement( which_arm = "left" , pose_init = POSE2_L, pose_final = POSE3_L, duration = 1.8, toff = -0.5 )
             #
             my_ctrl.run( )
 

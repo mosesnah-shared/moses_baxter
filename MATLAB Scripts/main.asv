@@ -114,15 +114,10 @@ ylabel( "Ang. Vel. (rad)" )
 set( a, 'xlim', [0, 8])
 legend( 'q', 'q0' )
 
+tvec = 0:0.01:8;
+vel1 = 1/D1 * (30 * ( (t1Vec - 0.1)/D1 ).^2 - 60 * ( (t - 0.1)/0.8 ).^3 + 30 * ( (t1Vec - 0.1)/0.8 ).^4 );
+
 D1 = 1.7; D2 = 1.8; toff=-0.5;
-tvec  = 0:0.01:D1;
-tvec2 = D1 + toff: 0.01: D1+toff+D2;
-vel1 = ( -0.5419854693 -0.4045874328 )/D1 * (30 * ( (tvec)/D1 ).^2 - 60 * ( (tvec)/D1 ).^3 + 30 * ( (tvec)/D1 ).^4 );
-vel2 = -( -0.4045874328 -0.2881893857)/D2 * (30 * ( (tvec2 - D1 - toff) /D2 ).^2 - 60 * ( (tvec2- D1 - toff)/D2 ).^3 + 30 * ( (tvec2- D1 - toff)/D2 ).^4 );
-
-plot( tvec , vel1 )
-plot( tvec2, vel2 )
-
 
 % f = figure; a = axes( 'parent', f );
 % hold on

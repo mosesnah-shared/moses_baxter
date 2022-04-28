@@ -106,7 +106,7 @@ The available options for CTRL_TYPE are as follows:
                     'right_w2' : -1.5823011827     }
 
     FINAL_POSE = {  'right_s0' : 0.7869321442,
-                    'right_s1' : 0.4881893857,
+                    'right_s1' : 0.0881893857,
                     'right_e0' : -0.0149563127,
                     'right_e1' : 0.7309418454,
                     'right_w0' : -0.0464029188,
@@ -130,23 +130,6 @@ The available options for CTRL_TYPE are as follows:
                          'left_w0':  3.0,
                          'left_w1': 12.0,
                          'left_w2':  1.5 }
-
-    JOINT_IMP_Bq_R  = { 'right_s0':  2.0,
-                        'right_s1': 10.0,
-                        'right_e0':  2.5,
-                        'right_e1':  1.5,
-                        'right_w0':  0.1,
-                        'right_w1':  1.0,
-                        'right_w2':  1.5  }
-
-    JOINT_IMP_Bq_L  ={   'left_s0':  2.0,
-                         'left_s1': 10.0,
-                         'left_e0':  2.5,
-                         'left_e1':  1.5,
-                         'left_w0':  0.1,
-                         'left_w1':  1.0,
-                         'left_w2':  1.5  }
-
 
     # # Case 1 - original 2022.01.28
     # Legacy Code
