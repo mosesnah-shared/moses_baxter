@@ -137,7 +137,7 @@ class JointImpedanceController( Controller ):
         self.type          = "joint_impedance_controller"
         self.is_save_data  = is_save_data
 
-        a   = 0.15 # The ratio between stiffness and dampling
+        a   = 0.2 # The ratio between stiffness and dampling
         BqR = { key : a * val for key, val in C.JOINT_IMP_Kq_R.items() }
         BqL = { key : a * val for key, val in C.JOINT_IMP_Kq_L.items() }
 
@@ -642,21 +642,25 @@ def main():
 
     if args.is_run_optimization:
 
-        my_log = Logger( record_data = True)
-
+        my_log = Logger( record_data = True )
 
         # Find the input parameters (input_pars) that are aimed to be optimized
         # Possible options (written in integer values) are as follows
         # [REF] https://nlopt.readthedocs.io/en/latest/NLopt_Algorithms/
-        idx       = 0
+
+        # Define the controller
+        my_ctrl = JointImpedanceController( my_baxter, is_save_data = False )
+        print( "[LOG] OPTIMIZATION MODE" )
+
+
         #   idx are                 0                   1               2               3                  4
         idx_opt   = [ nlopt.GN_DIRECT_L, nlopt.GN_DIRECT_L_RAND, nlopt.GN_DIRECT, nlopt.GN_CRS2_LM, nlopt.GN_ESCH  ]
+        idx       = 3
 
 
-        # The upper and lower bound of the parameters of Baxter
-        # D1, s1, e1, w1
-        lb    = np.array( [ -0.7, 0.5, -1.3, 0.3, 0.3, 0.0 ] )
-        ub    = np.array( [  0.2, 1.5,  1.3, 1.6, 1.6, 1.0 ] )
+        #  Upper/Lower Bound   s1    e1     w1   D1   D2    a
+        lb    = np.array( [ -0.65, 0.31, -0.76, 0.8, 0.5, -0.6 ] )
+        ub    = np.array( [ -0.40, 0.73, -0.25, 1.5, 1.5,  0.5 ] )
         n_opt = 6
 
         algorithm = idx_opt[ idx ]                                              # Selecting the algorithm to be executed
@@ -664,46 +668,72 @@ def main():
 
         opt.set_lower_bounds( lb )
         opt.set_upper_bounds( ub )
-        opt.set_maxeval( 130 )
+        opt.set_maxeval( 40 )
 
         init = ( lb + ub ) * 0.5 + 0.05 * lb                                    # Setting an arbitrary non-zero initial step
 
-        my_baxter.move2pose( C.RIGHT, C.GRASP_POSE, wait_time = 2, joint_speed = 0.2 )
-        my_baxter.move2pose( C.LEFT,  C.GRASP_POSE, wait_time = 2, joint_speed = 0.2 )
-        # #
-        my_baxter.control_gripper( mode = "timer" )
+
+        # Uncomment the following 3 sentences in case if the tablecloth is not equipped.
+        # my_baxter.move2pose( C.RIGHT, C.GRASP_POSE, wait_time = 2, joint_speed = 0.2 )
+        # my_baxter.move2pose( C.LEFT,  C.GRASP_POSE, wait_time = 2, joint_speed = 0.2 )
+        # my_baxter.control_gripper( mode = "timer" )
 
         tmp_t = 98 # If the coverage is higher than this value, simply set it as 100 and stop optimizaiton
-
-        input( "Ready for optimization, press any key to continue" )
-
 
         def nlopt_objective( pars, grad ):                                      # Defining the objective function that we are aimed to optimize.
 
             # Run Baxter - Code implementation here
             # Manipulating the cloth
             # [STEP #1] Move to initial posture
-
             # [STEP #2] Initiate movement
-            pose = my_baxter.tmp_pose_gen( pars[ 0:3 ] )
+            # Go to the initial posture
+            my_ctrl.move2pose( C.GRASP_POSE, duration = 5, toff = 0.1 )
 
-            my_log.write( "[Iteration] " + str( opt.get_numevals( ) ) + " [parameters] " + str( pars ) )
 
-            my_baxter.joint_impedance(  C.BOTH, [ C.GRASP_POSE, pose , C.FINAL_POSE ] , Ds = [ pars[ 3 ], pars[ 4 ] ], toffs = [ pars[ 5 ], 5 ]  )
+            POSE1_R = C.GRASP_POSE
+            POSE1_L = pose_right2left( C.GRASP_POSE  )
 
+            # s0, s1, e0, e1, w0, w1, w2 number
+            POSE2_R = my_ctrl.gen_dict( "right", np.array( [ C.GRASP_POSE[ "right_s0" ],
+                                                                              pars[ 0 ],
+                                                             C.GRASP_POSE[ "right_e0" ],
+                                                                              pars[ 1 ],
+                                                             C.GRASP_POSE[ "right_w0" ],
+                                                                              pars[ 2 ],
+                                                             C.GRASP_POSE[ "right_w2" ] ] ) )
+            POSE2_L = pose_right2left( POSE2_R  )
+
+            POSE3_R = C.FINAL_POSE
+            POSE3_L = pose_right2left( C.FINAL_POSE  )
+
+
+            my_ctrl.add_movement( which_arm = "right", pose_init = POSE1_R, pose_final = POSE2_R, duration = pars[ 3 ], toff = 0.0                   )
+            my_ctrl.add_movement( which_arm = "right", pose_init = POSE2_R, pose_final = POSE3_R, duration = pars[ 4 ], toff = pars[ 3 ] * pars[ 5 ] )
+
+            my_ctrl.add_movement( which_arm = "left" , pose_init = POSE1_L, pose_final = POSE2_L, duration = pars[ 3 ], toff = 0.0                   )
+            my_ctrl.add_movement( which_arm = "left" , pose_init = POSE2_L, pose_final = POSE3_L, duration = pars[ 4 ], toff = pars[ 3 ] * pars[ 5 ] )
+
+            my_log.write( "[Iteration] " + str( opt.get_numevals( ) + 1) + " [parameters] " + str( pars ) )
+
+            my_ctrl.run( )
+            rospy.sleep( 3 )
 
             # Get Baxter's tablecloth performance
             obj = rospy.get_param( 'my_obj_func' )
-
             if obj >= tmp_t:
                 obj = 100.0
 
             my_log.write( " [obj] " + str( obj ) + "\n" )
+            my_ctrl.reset( )
 
-            my_baxter.joint_impedance(  C.BOTH, [ C.FINAL_POSE, C.LIFT_POSE   ], Ds = 5, toffs = [ 1 ]  )
-            my_baxter.joint_impedance(  C.BOTH, [ C.LIFT_POSE , C.GRASP_POSE  ], Ds = 5, toffs = [ 3 ]  )
+            # my_ctrl.move2pose(  C.LIFT_POSE, duration = 5, toff = 0.1 )
+
+
 
             return 100.0 - obj # Inverting the value
+
+
+        # input( "Ready for optimization, press any key to continue" )
 
         opt.set_min_objective( nlopt_objective )
         opt.set_stopval( -1    )                                                # If value is within 98~100% (i.e., 0~2%)
@@ -730,11 +760,12 @@ def main():
 
         elif args.ctrl_type == "joint_impedance_controller":
             my_ctrl = JointImpedanceController( my_baxter, is_save_data = args.save_data )
-            my_ctrl.move2pose( C.GRASP_POSE, duration = 3, toff = 1 )
+            my_ctrl.move2pose( C.GRASP_POSE, duration = 5, toff = 1 )
 
             # rospy.sleep( 5 )
             # my_baxter.close_gripper()
             # input( "Ready for optimization, press any key to continue" )
+            # my_ctrl.move2pose( C.LIFT_POSE , duration = 5, toff = 1 )
 
             # # Design the movements in detail
             POSE1_R = C.GRASP_POSE
@@ -746,11 +777,11 @@ def main():
             POSE3_R = C.FINAL_POSE
             POSE3_L = pose_right2left( C.FINAL_POSE  )
             #
-            my_ctrl.add_movement( which_arm = "right", pose_init = POSE1_R, pose_final = POSE2_R, duration = 1.7, toff =  0.0 )
-            my_ctrl.add_movement( which_arm = "left" , pose_init = POSE1_L, pose_final = POSE2_L, duration = 1.7, toff =  0.0 )
-            #
-            my_ctrl.add_movement( which_arm = "right", pose_init = POSE2_R, pose_final = POSE3_R, duration = 1.8, toff = -0.5 )
-            my_ctrl.add_movement( which_arm = "left" , pose_init = POSE2_L, pose_final = POSE3_L, duration = 1.8, toff = -0.5 )
+            my_ctrl.add_movement( which_arm = "right", pose_init = POSE1_R, pose_final = POSE2_R, duration = 0.87, toff =  0.0 )
+            my_ctrl.add_movement( which_arm = "left" , pose_init = POSE1_L, pose_final = POSE2_L, duration = 0.87, toff =  0.0 )
+
+            my_ctrl.add_movement( which_arm = "right", pose_init = POSE2_R, pose_final = POSE3_R, duration = 0.80, toff = 0.87 * 0.45 )
+            my_ctrl.add_movement( which_arm = "left" , pose_init = POSE2_L, pose_final = POSE3_L, duration = 0.80, toff = 0.87 * 0.45 )
             #
             my_ctrl.run( )
 

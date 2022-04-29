@@ -104,14 +104,15 @@ end
 
  %% Plotting the ZFT and actual
 % Index 2, 4 and 6 are s1, e1, w1, right hand
-idx  = 2;
+idx  = 4;
 tmax = 8;
 
 f = figure; a = axes( 'parent', f );
 hold on
 % plot(  raw_data.dq_R.time,  raw_data.dq_R.value( idx, : ), 'o', 'markersize', 10, 'parent', a )
 % plot( raw_data.dqo_R.time, raw_data.dqo_R.value( idx, : ), 'o', 'markersize', 10,'parent', a )
-% plot( raw_data.q_R.time, raw_data.q_R.value( idx, : ), 'o', 'markersize', 10,'parent', a )
+plot( raw_data.q_R.time, raw_data.q_R.value( idx, : ), 'o', 'markersize', 10,'parent', a )
+plot( raw_data.q_L.time, raw_data.q_L.value( idx, : ), 'o', 'markersize', 10,'parent', a )
 xlabel( "Time (sec)" )
 ylabel( "Ang. Vel. (rad)" )
 % legend( 'q', 'q0' )
@@ -136,10 +137,13 @@ for i = 1 : N
     [ posvec1( i ), velvec1( i ) ] = submovement( t( i ),         0, pi( idx ), pm( idx ), D1 );
     [ posvec2( i ), velvec2( i ) ] = submovement( t( i ), D1 + toff, 0, pf( idx ) - pm(idx), D2 );
 end
+% 
+% plot( t, velvec1, 'parent', a )
+% plot( t, velvec2, 'parent', a )
+% plot( t, velvec1 + velvec2, 'parent', a )
 
-plot( t, velvec1, 'parent', a )
-plot( t, velvec2, 'parent', a )
-plot( t, velvec1 + velvec2, 'parent', a )
+
+plot( t, posvec1 + posvec2, 'parent', a )
 
 set( a, 'xlim', [ 0, 8 ])
 

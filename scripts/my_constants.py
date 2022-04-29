@@ -97,6 +97,14 @@ The available options for CTRL_TYPE are as follows:
                     'right_w1' :  0.3879126465,
                     'right_w2' : -1.5823011827 }
 
+    # MID_POSE = {    'right_s0' :  0.7869321442,
+    #                 'right_s1' : -0.62405116,
+    #                 'right_e0' : -0.0149563127,
+    #                 'right_e1' :  0.35521872 ,
+    #                 'right_w0' : -0.0464029188,
+    #                 'right_w1' :  -0.4221731,
+    #                 'right_w2' : -1.5823011827}
+
     MID_POSE = {    'right_s0' : 0.7869321442,
                     'right_s1' : -0.5419854693,
                     'right_e0' : -0.0149563127,
@@ -106,7 +114,7 @@ The available options for CTRL_TYPE are as follows:
                     'right_w2' : -1.5823011827     }
 
     FINAL_POSE = {  'right_s0' : 0.7869321442,
-                    'right_s1' : 0.0881893857,
+                    'right_s1' : 0.0,
                     'right_e0' : -0.0149563127,
                     'right_e1' : 0.7309418454,
                     'right_w0' : -0.0464029188,
@@ -120,7 +128,7 @@ The available options for CTRL_TYPE are as follows:
                         'right_e0':  8.0,
                         'right_e1': 10.0,
                         'right_w0':  3.0,
-                        'right_w1': 12.0,
+                        'right_w1': 10.0,
                         'right_w2':  1.5 }
 
     JOINT_IMP_Kq_L  = {  'left_s0': 15.0,
@@ -128,7 +136,7 @@ The available options for CTRL_TYPE are as follows:
                          'left_e0':  8.0,
                          'left_e1': 10.0,
                          'left_w0':  3.0,
-                         'left_w1': 12.0,
+                         'left_w1': 10.0,
                          'left_w2':  1.5 }
 
     # # Case 1 - original 2022.01.28

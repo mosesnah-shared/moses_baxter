@@ -341,4 +341,4 @@ if __name__ == "__main__":
         my_cam._get_pos_and_color( )
         exit( )
 
-    my_cam.run( platform_points = np.array( [ [692, 173],[395, 180], [367, 462],[750, 446] ]  ), color = "yellow"  )
+    my_cam.run( platform_points = np.array( [ [679, 146], [386, 156], [362, 433],[740, 412] ]  ), color = "yellow"  )
