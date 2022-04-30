@@ -715,8 +715,8 @@ def main():
                                                              C.GRASP_POSE[ "right_w2" ] ] ) )
             POSE3_L = pose_right2left( POSE3_R  )
 
-            POSE3_R = C.FINAL_POSE
-            POSE3_L = pose_right2left( C.FINAL_POSE  )
+            # POSE3_R = C.FINAL_POSE
+            # POSE3_L = pose_right2left( C.FINAL_POSE  )
 
 
             my_ctrl.add_movement( which_arm = "right", pose_init = POSE1_R, pose_final = POSE2_R, duration = pars[ 6 ], toff = 0.0                   )
@@ -769,6 +769,10 @@ def main():
         # =============================================================== #
 
         elif args.ctrl_type == "joint_impedance_controller":
+            # N = 20
+            # my_log = Logger( record_data = True )
+
+            # for i in range( N ):
             my_ctrl = JointImpedanceController( my_baxter, is_save_data = args.save_data )
             my_ctrl.move2pose( C.GRASP_POSE, duration = 5, toff = 1 )
 
@@ -778,7 +782,9 @@ def main():
             # my_ctrl.move2pose( C.LIFT_POSE , duration = 5, toff = 1 )
 
             # POSE_MID_s1    POSE_MID_e1     POSE_MID_w1,  POSE_FINAL_s1,  POSE_FINAL_e1, POSE_FINAL_w1   D1   D2    a, toff = D1 * a
-            pars = [-0.64213268,  0.33356569, -0.46185895, -0.38859129,  0.48006301 ,-0.74097092, 1.34714252,  0.72278278,  0.2171941 ]
+            # pars = [-0.61388889, 0.57       ,-0.675     , -0.25277778, 0.57       , -0.505      , 1.05       , 1.45       , 0.19444444] # DIRECT
+            pars = [-0.64213268, 0.33356569 ,-0.46185895, -0.38859129, 0.48006301 , -0.74097092 , 1.34714252 , 0.72278278 , 0.2171941 ] # CRS
+
 
             POSE1_R = C.GRASP_POSE
             POSE1_L = pose_right2left( C.GRASP_POSE  )
@@ -802,8 +808,8 @@ def main():
                                                              C.GRASP_POSE[ "right_w2" ] ] ) )
             POSE3_L = pose_right2left( POSE3_R  )
 
-            POSE3_R = C.FINAL_POSE
-            POSE3_L = pose_right2left( C.FINAL_POSE  )
+            # POSE3_R = C.FINAL_POSE
+            # POSE3_L = pose_right2left( C.FINAL_POSE  )
 
 
             my_ctrl.add_movement( which_arm = "right", pose_init = POSE1_R, pose_final = POSE2_R, duration = pars[ 6 ], toff = 0.0                   )
@@ -811,6 +817,16 @@ def main():
 
             my_ctrl.add_movement( which_arm = "left" , pose_init = POSE1_L, pose_final = POSE2_L, duration = pars[ 6 ], toff = 0.0                   )
             my_ctrl.add_movement( which_arm = "left" , pose_init = POSE2_L, pose_final = POSE3_L, duration = pars[ 7 ], toff = pars[ 6 ] * pars[ 8 ] )
+
+            my_ctrl.run( )
+
+            rospy.sleep( 3 )
+            # Get Baxter's tablecloth performance
+            obj = rospy.get_param( 'my_obj_func' )
+
+            my_log.write( "[obj] " + str( obj ) + "\n" )
+
+            my_ctrl.reset( )
 
 
             # # Design the movements in detail
@@ -831,7 +847,9 @@ def main():
             # my_ctrl.add_movement( which_arm = "right", pose_init = POSE2_R, pose_final = POSE3_R, duration = 1, toff = 0.87 * 0.45 )
             # my_ctrl.add_movement( which_arm = "left" , pose_init = POSE2_L, pose_final = POSE3_L, duration = 1, toff = 0.87 * 0.45 )
             #
-            my_ctrl.run( )
+
+            # my_log.log.close()
+
 
         # =============================================================== #
         # ================== PRINT JOINT CONTROLLER ===================== #

@@ -15,9 +15,9 @@ my_fig_config(  'fontsize',  40, ...
                'markerSize',  25 );   
     
 %% (--) Read Data
-result_dir = "../results/2022_04_28/";
-file_name  = "20220428_163643.txt";
-
+result_dir = "../results/2022_04_30/";
+file_name  = "DIRECT_L_OPT.txt";
+% 2022_04_30/CRS.txt
 file_name  = result_dir + file_name;
 
 fid      = fopen( file_name );                                         % Opening the txt file with the name "txtName"
@@ -60,6 +60,11 @@ str_idx = [ "tau_R", "tau_L", "dq_R", "dq_L", "q_L", "q_R", "qo_R", "qo_L", "dqo
 idx = ones( 1, length( str_idx ) );
 
 %%
+
+for k=1:2
+    tline = fgets(fid);
+end
+
 
 while( ~feof( fid ) )
 
@@ -104,28 +109,28 @@ end
 
  %% Plotting the ZFT and actual
 % Index 2, 4 and 6 are s1, e1, w1, right hand
-idx  = 4;
+idx  = 2;
 tmax = 8;
 
 f = figure; a = axes( 'parent', f );
 hold on
-% plot(  raw_data.dq_R.time,  raw_data.dq_R.value( idx, : ), 'o', 'markersize', 10, 'parent', a )
-% plot( raw_data.dqo_R.time, raw_data.dqo_R.value( idx, : ), 'o', 'markersize', 10,'parent', a )
-plot( raw_data.q_R.time, raw_data.q_R.value( idx, : ), 'o', 'markersize', 10,'parent', a )
-plot( raw_data.q_L.time, raw_data.q_L.value( idx, : ), 'o', 'markersize', 10,'parent', a )
+plot(  raw_data.dq_R.time,  raw_data.dq_R.value( idx, : ), 'o', 'markersize', 10, 'parent', a )
+plot( raw_data.dqo_R.time, raw_data.dqo_R.value( idx, : ), 'o', 'markersize', 10,'parent', a )
+% plot( raw_data.q_R.time, raw_data.q_R.value( idx, : ), 'o', 'markersize', 10,'parent', a )
+% plot( raw_data.q_L.time, raw_data.q_L.value( idx, : ), 'o', 'markersize', 10,'parent', a )
 xlabel( "Time (sec)" )
-ylabel( "Ang. Vel. (rad)" )
+% ylabel( "Ang. Vel. (rad)" )
 % legend( 'q', 'q0' )
 
 t = 0 : 0.01 : tmax;
 N = length( t );
 
-D1   = 1.7;
-D2   = 1.8;
-toff = -0.5;
+D1   = 1.05;
+D2   = 1.45;
+toff = 0.19444444* D1;
 pi   = [ 0.7869321442,  0.4045874328, -0.0149563127, 1.4116458201, -0.0464029188,  0.3879126465, -1.5823011827 ];
-pm   = [ 0.7869321442, -0.5419854693, -0.0149563127, 0.3097428536, -0.0464029188, -0.7596604570, -1.5823011827 ];
-pf   = [ 0.7869321442,  0.0881893857, -0.0149563127, 0.7309418454, -0.0464029188, -0.2511893540, -1.5823011827 ];
+pm   = [ 0.7869321442, -0.61388889, -0.0149563127, 0.57, -0.0464029188, -0.675, -1.5823011827 ];
+pf   = [ 0.7869321442, -0.25277778, -0.0149563127, 0.57, -0.0464029188,  -0.505   , -1.5823011827 ];
 
 posvec1 = zeros( 1, N );
 velvec1 = zeros( 1, N );
@@ -138,12 +143,12 @@ for i = 1 : N
     [ posvec2( i ), velvec2( i ) ] = submovement( t( i ), D1 + toff, 0, pf( idx ) - pm(idx), D2 );
 end
 % 
-% plot( t, velvec1, 'parent', a )
-% plot( t, velvec2, 'parent', a )
+plot( t, velvec1, 'parent', a )
+plot( t, velvec2, 'parent', a )
 % plot( t, velvec1 + velvec2, 'parent', a )
 
 
-plot( t, posvec1 + posvec2, 'parent', a )
+% plot( t, posvec1 + posvec2, 'parent', a )
 
 set( a, 'xlim', [ 0, 8 ])
 
@@ -342,3 +347,55 @@ end
 
 NAME = ["CRS", "DIRECT"];
 title( NAME{ idx } ) 
+
+%% Repeatability Plot
+
+result_dir = "../results/2022_04_30/";
+
+DIRECT = 2;
+CRS    = 1;
+
+idx = CRS;
+
+tmp = [ "baxter_2022_04_30-14_55.txt", "baxter_2022_04_30-15_18.txt" ];
+f = figure( ); a = axes( 'parent', f );
+
+for ttmp = 1 : 2
+
+file_name  = result_dir + tmp{ ttmp };
+
+fid      = fopen( file_name );                                         % Opening the txt file with the name "txtName"
+
+for k=1:2
+    tline = fgets(fid);
+end
+
+cnt = 1;
+
+tmparr = nan( 1, 600 );
+
+while( ~feof( fid ) )
+
+    
+    % First string is time and second string is the name of the variable    
+    tline  = fgetl( fid );                                             % Get the txt file
+    
+    % Getting all the values
+    values = regexp( tline , '[+-]?([0-9]*[.])?[0-9]+', 'match' );            % Taking out the string inside the bracket (i.e., without the bracket)
+    values = str2double( values );
+    
+    tmparr( cnt ) = values;
+    cnt = cnt + 1;
+end
+
+hold on
+plot( ttmp * ones( 1, cnt ) , tmparr(1:cnt), 'o', 'linewidth', 10, 'parent', a )
+% set( a, 'xlim', [1,100], 'ylim', [0, 100] )
+% xlabel( 'Iteration (-)' ); ylabel( 'Coverage (\%)' )
+
+% NAME = ["CRS", "DIRECT"];
+% title( NAME{ idx } ) 
+
+end
+
+set( gca, 'xlim', [0,3], 'xtick', [0,1,2,3], 'ylim', [0,100],'xticklabel', {"", "CRS", "DIRECT",""} )
