@@ -35,6 +35,8 @@ from my_utils     import GripperConnect, Logger
 # Local Library, customized messages
 from moses_baxter.msg import my_msg
 
+np.set_printoptions( linewidth = 4000, precision = 8)
+
 def pose_right2left( pose: dict ):
     """
         Changing the dictionary key's prefix name from "right_" to "left_", and flipping the sign too
@@ -655,7 +657,7 @@ def main():
 
         #   idx are                 0                   1               2               3                  4
         idx_opt   = [ nlopt.GN_DIRECT_L, nlopt.GN_DIRECT_L_RAND, nlopt.GN_DIRECT, nlopt.GN_CRS2_LM, nlopt.GN_ESCH  ]
-        idx       = 3
+        idx       = 1
 
 
         #  Upper/Lower Bound, ordered as:
@@ -669,7 +671,7 @@ def main():
 
         opt.set_lower_bounds( lb )
         opt.set_upper_bounds( ub )
-        opt.set_maxeval( 100 )
+        opt.set_maxeval( 200 )
 
         init = ( lb + ub ) * 0.5 + 0.05 * lb                                    # Setting an arbitrary non-zero initial step
 
@@ -723,7 +725,7 @@ def main():
             my_ctrl.add_movement( which_arm = "left" , pose_init = POSE1_L, pose_final = POSE2_L, duration = pars[ 6 ], toff = 0.0                   )
             my_ctrl.add_movement( which_arm = "left" , pose_init = POSE2_L, pose_final = POSE3_L, duration = pars[ 7 ], toff = pars[ 6 ] * pars[ 8 ] )
 
-            my_log.write( "[Iteration] " + str( opt.get_numevals( ) + 1) + " [parameters] " + str( pars ) )
+            my_log.write( "[Iteration] " + str( opt.get_numevals( ) + 1) + " [parameters] " + np.array2string( np.array( pars ).flatten(), separator = ',' ) )
 
             my_ctrl.run( )
             rospy.sleep( 3 )
@@ -738,8 +740,6 @@ def main():
 
             # my_ctrl.move2pose(  C.LIFT_POSE, duration = 5, toff = 0.1 )
 
-
-
             return 100.0 - obj # Inverting the value
 
 
@@ -749,7 +749,7 @@ def main():
         opt.set_stopval( -1    )                                                # If value is within 98~100% (i.e., 0~2%)
         xopt = opt.optimize( init )                                             # Start at the mid-point of the lower and upper bound
 
-
+        my_log.log.close()
     # ============================================================================= #
     # ============================= NORMAL EXECUTION ============================== #
     # ============================================================================= #

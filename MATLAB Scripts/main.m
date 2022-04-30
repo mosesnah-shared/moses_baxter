@@ -181,11 +181,19 @@ ylabel( "Angle (rad)", 'fontsize', 50 );
 
 %% (--) Optimization Data analysis
 
-result_dir = "../results/optimization/";
+result_dir = "../results/2022_04_30/";
 
-file_name  = "36x42.txt";
+DIRECT = 2;
+CRS    = 1;
 
-file_name  = result_dir + file_name;
+idx = CRS;
+
+tmp = [ "baxter_2022_04_30-10_47.txt", "baxter_2022_04_30-12_43.txt" ];
+
+% file_name  = "baxter_2022_04_30-10_47.txt";
+% file_name  = "baxter_2022_04_30-12_43.txt";
+
+file_name  = result_dir + tmp{ idx };
 
 fid      = fopen( file_name );                                         % Opening the txt file with the name "txtName"
 raw_data = struct();
@@ -195,10 +203,19 @@ raw_data.par1   = nan( 1, n );
 raw_data.par2   = nan( 1, n );
 raw_data.par3   = nan( 1, n );
 raw_data.par4   = nan( 1, n );
+raw_data.par5   = nan( 1, n );
+raw_data.par6   = nan( 1, n );
+raw_data.par7   = nan( 1, n );
+raw_data.par8   = nan( 1, n );
+raw_data.par9   = nan( 1, n );
 raw_data.output = nan( 1, n );
 
 
 i = 1;
+for k=1:6
+    tline = fgets(fid);
+end
+
 while( ~feof( fid ) )
 
     
@@ -214,11 +231,24 @@ while( ~feof( fid ) )
     raw_data.par2( i ) = values( 3 );
     raw_data.par3( i ) = values( 4 );
     raw_data.par4( i ) = values( 5 );
+    raw_data.par5( i ) = values( 6 );
+    raw_data.par6( i ) = values( 7 );
+    raw_data.par7( i ) = values( 8 );
+    raw_data.par8( i ) = values( 9 );    
+    raw_data.par9( i ) = values( 10 );    
     
-    raw_data.output( i ) = values( 6 );
-    
+    raw_data.output( i ) = values( 11 );    
     i = i + 1;
 end
+
+f = figure( ); a = axes( 'parent', f );
+plot( raw_data.iter, raw_data.output, 'linewidth', 10, 'parent', a )
+set( a, 'xlim', [1,100], 'ylim', [0, 100] )
+xlabel( 'Iteration (-)' ); ylabel( 'Coverage (\%)' )
+
+NAME = ["CRS", "DIRECT"];
+title( NAME{ idx } ) 
+
 
 %% (--) Optimization Data analysis 2
 
@@ -269,3 +299,46 @@ plot( raw_data.iter, raw_data.output, 'linewidth', 10 )
 xlabel( 'Iteration (-)', 'fontsize', 35 );
 ylabel( 'Coverage (\%)', 'fontsize', 35 )
 set( gca, 'xlim', [1, max( raw_data.iter ) ], 'fontsize', 40 )
+
+%% 
+ub = [ -0.65, 0.31, -0.76, -0.65, 0.31, -0.76, 0.6, 0.6, -0.6 ];
+lb = [  0.00, 0.83, -0.25,  0.00, 0.83, -0.25, 1.5, 1.5,  0.5 ];
+
+thres = 80;
+idx_vals = find( raw_data.output > thres );
+
+par1 = raw_data.par1( idx_vals );
+par2 = raw_data.par2( idx_vals );
+par3 = raw_data.par3( idx_vals );
+par4 = raw_data.par4( idx_vals );
+par5 = raw_data.par5( idx_vals );
+par6 = raw_data.par6( idx_vals );
+par7 = raw_data.par7( idx_vals );
+par8 = raw_data.par8( idx_vals );
+par9 = raw_data.par9( idx_vals );
+
+hold on
+
+
+plot( 1*ones( 1, length( par1 )), par1, 'o', 'color', 0.1 * ones( 1, 3) )
+plot( 2*ones( 1, length( par2 )), par2, 'o', 'color', 0.1 * ones( 1, 3) )
+plot( 3*ones( 1, length( par3 )), par3, 'o', 'color', 0.1 * ones( 1, 3) )
+plot( 4*ones( 1, length( par4 )), par4, 'o', 'color', 0.1 * ones( 1, 3) )
+plot( 5*ones( 1, length( par5 )), par5, 'o', 'color', 0.1 * ones( 1, 3) )
+plot( 6*ones( 1, length( par6 )), par6, 'o', 'color', 0.1 * ones( 1, 3) )
+plot( 7*ones( 1, length( par7 )), par7, 'o', 'color', 0.1 * ones( 1, 3) )
+plot( 8*ones( 1, length( par8 )), par8, 'o', 'color', 0.1 * ones( 1, 3) )
+plot( 9*ones( 1, length( par9 )), par9, 'o', 'color', 0.1 * ones( 1, 3) )
+set( gca, 'xtick', [1:9], 'xticklabel', {} )
+lw = 0.15;
+
+set( gca, 'ylim', [-1, 2])
+
+for i = 1 : 9
+   fill( [ i-lw i+lw i+lw i-lw ], [ lb( i ), lb( i ), ub( i ), ub( i )], 0.1 * ones( 1, 3), 'facealpha', 0.3, 'edgealpha', 0)
+ 
+    
+end
+
+NAME = ["CRS", "DIRECT"];
+title( NAME{ idx } ) 
