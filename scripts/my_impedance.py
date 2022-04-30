@@ -658,17 +658,18 @@ def main():
         idx       = 3
 
 
-        #  Upper/Lower Bound   s1    e1     w1   D1   D2    a
-        lb    = np.array( [ -0.65, 0.31, -0.76, 0.8, 0.5, -0.6 ] )
-        ub    = np.array( [ -0.40, 0.73, -0.25, 1.5, 1.5,  0.5 ] )
-        n_opt = 6
+        #  Upper/Lower Bound, ordered as:
+        #  POSE_MID_s1    POSE_MID_e1     POSE_MID_w1,  POSE_FINAL_s1,  POSE_FINAL_e1, POSE_FINAL_w1   D1   D2    a
+        lb    = np.array( [ -0.65, 0.31, -0.76, -0.65, 0.31, -0.76, 0.6, 0.6, -0.6 ] )
+        ub    = np.array( [  0.00, 0.83, -0.25,  0.00, 0.83, -0.25, 1.5, 1.5,  0.5 ] )
+        n_opt = 9
 
         algorithm = idx_opt[ idx ]                                              # Selecting the algorithm to be executed
         opt       = nlopt.opt( algorithm, n_opt )                               # Defining the class for optimization
 
         opt.set_lower_bounds( lb )
         opt.set_upper_bounds( ub )
-        opt.set_maxeval( 40 )
+        opt.set_maxeval( 100 )
 
         init = ( lb + ub ) * 0.5 + 0.05 * lb                                    # Setting an arbitrary non-zero initial step
 
@@ -703,15 +704,24 @@ def main():
                                                              C.GRASP_POSE[ "right_w2" ] ] ) )
             POSE2_L = pose_right2left( POSE2_R  )
 
+            POSE3_R = my_ctrl.gen_dict( "right", np.array( [ C.GRASP_POSE[ "right_s0" ],
+                                                                              pars[ 3 ],
+                                                             C.GRASP_POSE[ "right_e0" ],
+                                                                              pars[ 4 ],
+                                                             C.GRASP_POSE[ "right_w0" ],
+                                                                              pars[ 5 ],
+                                                             C.GRASP_POSE[ "right_w2" ] ] ) )
+            POSE3_L = pose_right2left( POSE3_R  )
+
             POSE3_R = C.FINAL_POSE
             POSE3_L = pose_right2left( C.FINAL_POSE  )
 
 
-            my_ctrl.add_movement( which_arm = "right", pose_init = POSE1_R, pose_final = POSE2_R, duration = pars[ 3 ], toff = 0.0                   )
-            my_ctrl.add_movement( which_arm = "right", pose_init = POSE2_R, pose_final = POSE3_R, duration = pars[ 4 ], toff = pars[ 3 ] * pars[ 5 ] )
+            my_ctrl.add_movement( which_arm = "right", pose_init = POSE1_R, pose_final = POSE2_R, duration = pars[ 6 ], toff = 0.0                   )
+            my_ctrl.add_movement( which_arm = "right", pose_init = POSE2_R, pose_final = POSE3_R, duration = pars[ 7 ], toff = pars[ 6 ] * pars[ 8 ] )
 
-            my_ctrl.add_movement( which_arm = "left" , pose_init = POSE1_L, pose_final = POSE2_L, duration = pars[ 3 ], toff = 0.0                   )
-            my_ctrl.add_movement( which_arm = "left" , pose_init = POSE2_L, pose_final = POSE3_L, duration = pars[ 4 ], toff = pars[ 3 ] * pars[ 5 ] )
+            my_ctrl.add_movement( which_arm = "left" , pose_init = POSE1_L, pose_final = POSE2_L, duration = pars[ 6 ], toff = 0.0                   )
+            my_ctrl.add_movement( which_arm = "left" , pose_init = POSE2_L, pose_final = POSE3_L, duration = pars[ 7 ], toff = pars[ 6 ] * pars[ 8 ] )
 
             my_log.write( "[Iteration] " + str( opt.get_numevals( ) + 1) + " [parameters] " + str( pars ) )
 
@@ -767,21 +777,59 @@ def main():
             # input( "Ready for optimization, press any key to continue" )
             # my_ctrl.move2pose( C.LIFT_POSE , duration = 5, toff = 1 )
 
-            # # Design the movements in detail
+            # POSE_MID_s1    POSE_MID_e1     POSE_MID_w1,  POSE_FINAL_s1,  POSE_FINAL_e1, POSE_FINAL_w1   D1   D2    a, toff = D1 * a
+            pars = [-0.64213268,  0.33356569, -0.46185895, -0.38859129,  0.48006301 ,-0.74097092, 1.34714252,  0.72278278,  0.2171941 ]
+
             POSE1_R = C.GRASP_POSE
             POSE1_L = pose_right2left( C.GRASP_POSE  )
 
-            POSE2_R = C.MID_POSE
-            POSE2_L = pose_right2left( C.MID_POSE    )
+            # s0, s1, e0, e1, w0, w1, w2 number
+            POSE2_R = my_ctrl.gen_dict( "right", np.array( [ C.GRASP_POSE[ "right_s0" ],
+                                                                              pars[ 0 ],
+                                                             C.GRASP_POSE[ "right_e0" ],
+                                                                              pars[ 1 ],
+                                                             C.GRASP_POSE[ "right_w0" ],
+                                                                              pars[ 2 ],
+                                                             C.GRASP_POSE[ "right_w2" ] ] ) )
+            POSE2_L = pose_right2left( POSE2_R  )
+
+            POSE3_R = my_ctrl.gen_dict( "right", np.array( [ C.GRASP_POSE[ "right_s0" ],
+                                                                              pars[ 3 ],
+                                                             C.GRASP_POSE[ "right_e0" ],
+                                                                              pars[ 4 ],
+                                                             C.GRASP_POSE[ "right_w0" ],
+                                                                              pars[ 5 ],
+                                                             C.GRASP_POSE[ "right_w2" ] ] ) )
+            POSE3_L = pose_right2left( POSE3_R  )
 
             POSE3_R = C.FINAL_POSE
             POSE3_L = pose_right2left( C.FINAL_POSE  )
-            #
-            my_ctrl.add_movement( which_arm = "right", pose_init = POSE1_R, pose_final = POSE2_R, duration = 0.87, toff =  0.0 )
-            my_ctrl.add_movement( which_arm = "left" , pose_init = POSE1_L, pose_final = POSE2_L, duration = 0.87, toff =  0.0 )
 
-            my_ctrl.add_movement( which_arm = "right", pose_init = POSE2_R, pose_final = POSE3_R, duration = 0.80, toff = 0.87 * 0.45 )
-            my_ctrl.add_movement( which_arm = "left" , pose_init = POSE2_L, pose_final = POSE3_L, duration = 0.80, toff = 0.87 * 0.45 )
+
+            my_ctrl.add_movement( which_arm = "right", pose_init = POSE1_R, pose_final = POSE2_R, duration = pars[ 6 ], toff = 0.0                   )
+            my_ctrl.add_movement( which_arm = "right", pose_init = POSE2_R, pose_final = POSE3_R, duration = pars[ 7 ], toff = pars[ 6 ] * pars[ 8 ] )
+
+            my_ctrl.add_movement( which_arm = "left" , pose_init = POSE1_L, pose_final = POSE2_L, duration = pars[ 6 ], toff = 0.0                   )
+            my_ctrl.add_movement( which_arm = "left" , pose_init = POSE2_L, pose_final = POSE3_L, duration = pars[ 7 ], toff = pars[ 6 ] * pars[ 8 ] )
+
+
+            # # Design the movements in detail
+            # POSE1_R = C.GRASP_POSE
+            # POSE1_L = pose_right2left( C.GRASP_POSE  )
+            #
+            # POSE2_R = C.MID_POSE
+            # POSE2_L = pose_right2left( C.MID_POSE    )
+            #
+            # POSE3_R = C.FINAL_POSE
+            # POSE3_L = pose_right2left( C.FINAL_POSE  )
+            #
+            # my_ctrl.add_movement( which_arm = "right", pose_init = POSE1_R, pose_final = POSE2_R, duration = 1, toff =  0.0 )
+            # my_ctrl.add_movement( which_arm = "left" , pose_init = POSE1_L, pose_final = POSE2_L, duration = 1, toff =  0.0 )
+            #
+            # my_ctrl.add_movement( which_arm = "right", pose_init = POSE2_R, pose_final = POSE3_R, duration = 1, toff = 0.4 )
+            # my_ctrl.add_movement( which_arm = "left" , pose_init = POSE2_L, pose_final = POSE3_L, duration = 1, toff = 0.4 )
+            # my_ctrl.add_movement( which_arm = "right", pose_init = POSE2_R, pose_final = POSE3_R, duration = 1, toff = 0.87 * 0.45 )
+            # my_ctrl.add_movement( which_arm = "left" , pose_init = POSE2_L, pose_final = POSE3_L, duration = 1, toff = 0.87 * 0.45 )
             #
             my_ctrl.run( )
 

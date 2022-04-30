@@ -131,7 +131,7 @@ class Camera( object ):
             # ======================================================================== #
             # First the noise should be cleaned-up
             img_denoised = cv2.fastNlMeansDenoisingColored( img_hsv, None, 20, 10, 7, 21 )                      # [REF] https://www.bogotobogo.com/python/OpenCV_Python/python_opencv3_Image_Non-local_Means_Denoising_Algorithm_Noise_Reduction.php
-            img_filtered = cv2.inRange( img_denoised, np.array( [100, 15, 30] ), np.array( [140, 120, 90] ) )    # The range was discovered manually _get_pos_and_color( ) method
+            img_filtered = cv2.inRange( img_denoised, np.array( [100, 15, 10] ), np.array( [160, 120, 90] ) )    # The range was discovered manually _get_pos_and_color( ) method
 
             # If you want to check the denoised image, uncomment the following line
             cv2.imshow( "denoised_filtered", img_filtered )
@@ -168,7 +168,8 @@ class Camera( object ):
             if mode == "detect" and len( tmp ) > 11:
 
                 platform_points = np.around( np.median( tmp, 0 ) ).astype( int )
-                print( "platform points are as follows:", np.squeeze( platform_points ) )
+
+                print( [ [x, y] for (x,y) in platform_points ] )
 
                 return np.int32( platform_points )
 
@@ -341,4 +342,4 @@ if __name__ == "__main__":
         my_cam._get_pos_and_color( )
         exit( )
 
-    my_cam.run( platform_points = np.array( [ [679, 146], [386, 156], [362, 433],[740, 412] ]  ), color = "yellow"  )
+    my_cam.run( platform_points = np.array( [[648, 160], [385, 170], [370, 405], [707, 378] ]  ), color = "yellow"  )
