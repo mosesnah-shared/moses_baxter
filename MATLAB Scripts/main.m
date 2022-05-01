@@ -16,7 +16,7 @@ my_fig_config(  'fontsize',  40, ...
     
 %% (--) Read Data
 result_dir = "../results/2022_04_30/";
-file_name  = "DIRECT_L_OPT.txt";
+file_name  = "CRS.txt";
 % 2022_04_30/CRS.txt
 file_name  = result_dir + file_name;
 
@@ -112,11 +112,15 @@ end
 idx  = 2;
 tmax = 8;
 
+% CRS:[ -0.64213268, 0.33356569 ,-0.46185895, -0.38859129, 0.48006301 , -0.74097092 , 1.34714252 , 0.72278278 , 0.2171941 ]
+% DIRECT: [-0.61388889, 0.57       ,-0.675     , -0.25277778, 0.57       , -0.505      , 1.05       , 1.45       , 0.19444444] 
+ 
 f = figure; a = axes( 'parent', f );
 hold on
 plot(  raw_data.dq_R.time,  raw_data.dq_R.value( idx, : ), 'o', 'markersize', 10, 'parent', a )
 plot( raw_data.dqo_R.time, raw_data.dqo_R.value( idx, : ), 'o', 'markersize', 10,'parent', a )
 % plot( raw_data.q_R.time, raw_data.q_R.value( idx, : ), 'o', 'markersize', 10,'parent', a )
+% plot( raw_data.qo_R.time, raw_data.qo_R.value( idx, : ), 'o', 'markersize', 10,'parent', a )
 % plot( raw_data.q_L.time, raw_data.q_L.value( idx, : ), 'o', 'markersize', 10,'parent', a )
 xlabel( "Time (sec)" )
 % ylabel( "Ang. Vel. (rad)" )
@@ -125,12 +129,20 @@ xlabel( "Time (sec)" )
 t = 0 : 0.01 : tmax;
 N = length( t );
 
-D1   = 1.05;
-D2   = 1.45;
-toff = 0.19444444* D1;
+% CRS
+% pars = [-0.64213268, 0.33356569 ,-0.46185895, 1.34714252 , 0.72278278 , 0.2171941];
+
+% DIRECT
+pars = [-0.61388889, 0.57       ,-0.675     , 1.05       , 1.45, 0.19444444]
+
+
+D1 = pars( 4 );
+D2 = pars( 5 );
+toff = pars( 6 ) * D1;
+
 pi   = [ 0.7869321442,  0.4045874328, -0.0149563127, 1.4116458201, -0.0464029188,  0.3879126465, -1.5823011827 ];
-pm   = [ 0.7869321442, -0.61388889, -0.0149563127, 0.57, -0.0464029188, -0.675, -1.5823011827 ];
-pf   = [ 0.7869321442, -0.25277778, -0.0149563127, 0.57, -0.0464029188,  -0.505   , -1.5823011827 ];
+pm   = [ 0.7869321442, pars(1), -0.0149563127, pars(2), -0.0464029188, pars(3), -1.5823011827 ];
+pf   = [ 0.7869321442, 0.0, -0.0149563127, 0.7309418454, -0.0464029188,  -0.2511893540  , -1.5823011827 ];
 
 posvec1 = zeros( 1, N );
 velvec1 = zeros( 1, N );
@@ -143,9 +155,9 @@ for i = 1 : N
     [ posvec2( i ), velvec2( i ) ] = submovement( t( i ), D1 + toff, 0, pf( idx ) - pm(idx), D2 );
 end
 % 
-plot( t, velvec1, 'parent', a )
-plot( t, velvec2, 'parent', a )
-% plot( t, velvec1 + velvec2, 'parent', a )
+% plot( t, velvec1, 'parent', a )
+% plot( t, velvec2, 'parent', a )
+plot( t, velvec1 + velvec2, 'parent', a )
 
 
 % plot( t, posvec1 + posvec2, 'parent', a )
@@ -191,7 +203,7 @@ result_dir = "../results/2022_04_30/";
 DIRECT = 2;
 CRS    = 1;
 
-idx = CRS;
+idx = DIRECT;
 
 tmp = [ "baxter_2022_04_30-10_47.txt", "baxter_2022_04_30-12_43.txt" ];
 
@@ -306,8 +318,11 @@ ylabel( 'Coverage (\%)', 'fontsize', 35 )
 set( gca, 'xlim', [1, max( raw_data.iter ) ], 'fontsize', 40 )
 
 %% 
-ub = [ -0.65, 0.31, -0.76, -0.65, 0.31, -0.76, 0.6, 0.6, -0.6 ];
-lb = [  0.00, 0.83, -0.25,  0.00, 0.83, -0.25, 1.5, 1.5,  0.5 ];
+% ub = [ -0.65, 0.31, -0.76, -0.65, 0.31, -0.76, 0.6, 0.6, -0.6 ];
+% lb = [  0.00, 0.83, -0.25,  0.00, 0.83, -0.25, 1.5, 1.5,  0.5 ];
+
+ub = [ -0.65, 0.31, -0.76, 0.6, 0.6, -0.6 ];
+lb = [  0.00, 0.83, -0.25, 1.5, 1.5,  0.5 ];
 
 thres = 80;
 idx_vals = find( raw_data.output > thres );
@@ -315,9 +330,9 @@ idx_vals = find( raw_data.output > thres );
 par1 = raw_data.par1( idx_vals );
 par2 = raw_data.par2( idx_vals );
 par3 = raw_data.par3( idx_vals );
-par4 = raw_data.par4( idx_vals );
-par5 = raw_data.par5( idx_vals );
-par6 = raw_data.par6( idx_vals );
+% par4 = raw_data.par4( idx_vals );
+% par5 = raw_data.par5( idx_vals );
+% par6 = raw_data.par6( idx_vals );
 par7 = raw_data.par7( idx_vals );
 par8 = raw_data.par8( idx_vals );
 par9 = raw_data.par9( idx_vals );
@@ -328,20 +343,22 @@ hold on
 plot( 1*ones( 1, length( par1 )), par1, 'o', 'color', 0.1 * ones( 1, 3) )
 plot( 2*ones( 1, length( par2 )), par2, 'o', 'color', 0.1 * ones( 1, 3) )
 plot( 3*ones( 1, length( par3 )), par3, 'o', 'color', 0.1 * ones( 1, 3) )
-plot( 4*ones( 1, length( par4 )), par4, 'o', 'color', 0.1 * ones( 1, 3) )
-plot( 5*ones( 1, length( par5 )), par5, 'o', 'color', 0.1 * ones( 1, 3) )
-plot( 6*ones( 1, length( par6 )), par6, 'o', 'color', 0.1 * ones( 1, 3) )
-plot( 7*ones( 1, length( par7 )), par7, 'o', 'color', 0.1 * ones( 1, 3) )
-plot( 8*ones( 1, length( par8 )), par8, 'o', 'color', 0.1 * ones( 1, 3) )
-plot( 9*ones( 1, length( par9 )), par9, 'o', 'color', 0.1 * ones( 1, 3) )
+% plot( 4*ones( 1, length( par4 )), par4, 'o', 'color', 0.1 * ones( 1, 3) )
+% plot( 5*ones( 1, length( par5 )), par5, 'o', 'color', 0.1 * ones( 1, 3) )
+% plot( 6*ones( 1, length( par6 )), par6, 'o', 'color', 0.1 * ones( 1, 3) )
+plot( 4*ones( 1, length( par7 )), par7, 'o', 'color', 0.1 * ones( 1, 3) )
+plot( 5*ones( 1, length( par8 )), par8, 'o', 'color', 0.1 * ones( 1, 3) )
+plot( 6*ones( 1, length( par9 )), par9, 'o', 'color', 0.1 * ones( 1, 3) )
 set( gca, 'xtick', [1:9], 'xticklabel', {} )
 lw = 0.15;
 
 set( gca, 'ylim', [-1, 2])
 
-for i = 1 : 9
+
+for i = [1:6]
    fill( [ i-lw i+lw i+lw i-lw ], [ lb( i ), lb( i ), ub( i ), ub( i )], 0.1 * ones( 1, 3), 'facealpha', 0.3, 'edgealpha', 0)
  
+   
     
 end
 

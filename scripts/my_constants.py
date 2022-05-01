@@ -114,7 +114,7 @@ The available options for CTRL_TYPE are as follows:
                     'right_w2' : -1.5823011827     }
 
     FINAL_POSE = {  'right_s0' : 0.7869321442,
-                    'right_s1' : 0.0,
+                    'right_s1' : 0.00000000000,
                     'right_e0' : -0.0149563127,
                     'right_e1' : 0.7309418454,
                     'right_w0' : -0.0464029188,
