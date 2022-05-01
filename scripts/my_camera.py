@@ -109,6 +109,23 @@ class Camera( object ):
 
         return poly_contour
 
+    def on_mouse( self, event, x, y, buttons, user_param ):
+
+        # Mouse callback that gets called for every mouse event (i.e. moving, clicking, etc.)
+        if self.done: # Nothing more to do
+            return
+
+        if event == cv2.EVENT_MOUSEMOVE:
+            self.current = (x, y)
+
+        elif event == cv2.EVENT_LBUTTONDOWN:
+            print( "Adding point #%d with position(%d,%d)" % ( len( self.points ), x, y ) )
+            self.points.append( (x, y) )
+
+        elif event == cv2.EVENT_RBUTTONDOWN:
+            print( "Completing polygon with %d points." % len(self.points))
+            self.done = True
+
 
     def detect_platform( self, mode = "debug" ):
 
@@ -131,7 +148,7 @@ class Camera( object ):
             # ======================================================================== #
             # First the noise should be cleaned-up
             img_denoised = cv2.fastNlMeansDenoisingColored( img_hsv, None, 20, 10, 7, 21 )                      # [REF] https://www.bogotobogo.com/python/OpenCV_Python/python_opencv3_Image_Non-local_Means_Denoising_Algorithm_Noise_Reduction.php
-            img_filtered = cv2.inRange( img_denoised, np.array( [100, 15, 10] ), np.array( [160, 120, 90] ) )    # The range was discovered manually _get_pos_and_color( ) method
+            img_filtered = cv2.inRange( img_denoised, np.array( [100, 10, 10] ), np.array( [160, 120, 90] ) )    # The range was discovered manually _get_pos_and_color( ) method
 
             # If you want to check the denoised image, uncomment the following line
             cv2.imshow( "denoised_filtered", img_filtered )
@@ -214,7 +231,7 @@ class Camera( object ):
 
             if not grabbed: continue
 
-            img_platform = cv2.resize(   img_platform, ( 0,0 ), fx = self.scl, fy = self.scl )
+            img_platform = cv2.resize(   img_platform, ( 0,0 ), fx = 0.5, fy = 0.5 )
             h, w = self._get_img_size( img_platform )
 
             if ( len( self.points ) > 0 ):
@@ -226,7 +243,8 @@ class Camera( object ):
             k = cv2.waitKey( 1 )                    # Wait for 1ms and get the key input
 
         # If drawing done, finish the drawing by filled image
-        img_platform_masked = np.zeros( ( self.img_h, self.img_w ), np.uint8 )
+        h, w = self._get_img_size( img_platform )
+        img_platform_masked = np.zeros( ( h, w ), np.uint8 )
 
         if ( len( self.points ) > 0):
             cv2.fillPoly( img_platform_masked, np.array( [ self.points ] ), FINAL_LINE_COLOR )
@@ -328,19 +346,21 @@ class Camera( object ):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
-    parser.add_argument("-d", "--detect_platform"   , help = "detect the target platform platform" , action = 'store_true')
-    parser.add_argument("-g", "--debug"             , help = "debug the image" , action = 'store_true')
+    parser.add_argument("--draw_platform"   , help = "draw the target platform"   , action = 'store_true')
+    parser.add_argument("--detect_platform" , help = "detect the target platform" , action = 'store_true')
+    parser.add_argument("--debug"           , help = "debug the image"            , action = 'store_true')
 
     args   = parser.parse_args()
     my_cam = Camera( args )
 
-    if args.detect_platform:
+    if args.draw_platform:
+        my_cam.draw_platform( )
+
+    elif args.detect_platform:
         my_cam.detect_platform( mode = "detect" )
-        exit( )
 
     elif args.debug:
         my_cam._get_pos_and_color( )
-        exit( )
 
-
-    my_cam.run( platform_points = np.array( [[398, 136], [355, 345], [682, 350], [651, 140]]  ), color = "yellow"  )
+    else:
+        my_cam.run( platform_points = np.array( [(372, 67), (350, 353), (722, 348), (674, 60)]  ), color = "yellow"  )
