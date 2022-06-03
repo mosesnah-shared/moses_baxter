@@ -416,3 +416,71 @@ plot( ttmp * ones( 1, cnt ) , tmparr(1:cnt), 'o', 'linewidth', 10, 'parent', a )
 end
 
 set( gca, 'xlim', [0,3], 'xtick', [0,1,2,3], 'ylim', [0,100],'xticklabel', {"", "CRS", "DIRECT",""} )
+
+%% (--) Read File
+dir_name  = "../results/2022_05_01/";
+file_name = "baxter_2022_05_01-16_05.txt";
+
+fid      = fopen( dir_name + file_name );                                         % Opening the txt file with the name "txtName"
+
+for k=1:4
+    tline = fgets(fid);
+end
+
+val_arr = nan( 6, 100 );
+out_arr = nan( 5, 100 );
+max_out = nan( 1, 100 );
+iter    = nan( 1, 100 );
+
+
+cnt = 1;
+while( ~feof( fid ) )
+
+    
+    % First string is time and second string is the name of the variable    
+    tline  = fgetl( fid );                                             % Get the txt file
+    
+    % Getting all the values
+    values = regexp( tline , '[+-]?([0-9]*[.])?[0-9]+', 'match' );            % Taking out the string inside the bracket (i.e., without the bracket)
+    values = str2double( values );
+    
+    iter( cnt )  = values( 1 );
+    val_arr( :, cnt ) = values( 2 : 7 );
+    out_arr( :, cnt ) = values( 8: end - 1);
+    max_out( cnt )    = values( end );
+    cnt = cnt + 1;
+end
+
+f = figure( ); a = axes('parent', f );
+hold on
+
+plot( iter, max_out, '-', 'linewidth', 10 );
+for i = iter( 1 : max( iter ) ) 
+    x = i * ones( 1, length( out_arr( :, i ) ) );
+    y = out_arr( :, i );
+    plot( x,y , 'o', 'linewidth', 2, 'markersize', 10, 'markeredgecolor', 'k', 'markerfacecolor', [ 0.8, 0.8, 0.8]   )
+%     errorbar( i,mean(y), std( y), 'linewidth', 3, 'color', 'k' )
+
+end
+
+
+
+xlabel( 'Iteration (-)' )
+ylabel( 'Coverage (\%)' )
+set( a, 'xlim', [1,max(iter) ], 'ylim',[ 0, 100 ] )
+
+f = figure( ); a = axes( 'parent', f )
+best_arr = val_arr( :, cnt-1 )';
+
+ub = [ -0.65, 0.31, -0.76, 0.6, 0.6, -0.6 ];
+lb = [  0.00, 0.83, -0.25, 1.5, 1.5,  0.5 ];
+lw = 0.15;
+
+set( gca, 'ylim', [-1, 2])
+
+hold on
+for i = [1:6]
+   fill( [ i-lw i+lw i+lw i-lw ], [ lb( i ), lb( i ), ub( i ), ub( i )], 0.1 * ones( 1, 3), 'facealpha', 0.3, 'edgealpha', 0)
+   plot( i, best_arr( i ), 'o', 'linewidth', 10, 'markersize', 30, 'markeredgecolor', 'k', 'markerfacecolor', 0.8 * ones( 1, 3)   )
+end
+set( a, 'xtick', [1:6], 'xticklabel', {} )
