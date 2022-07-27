@@ -57,7 +57,6 @@ def pose_right2left( pose: dict ):
     return new_pose
 
 
-
 class Controller( object ):
     """
         Primitive Controller Object
@@ -508,6 +507,24 @@ class JointPositionController( Controller ):
         self.reset( )
 
 
+class CartesianImpedanceController( Controller ):
+    
+    def __init__( self, robot ):
+        super().__init__( robot )
+
+        self.type    = "cartesian_impedance_controller"
+        self.moves   = []                  
+        self.n_moves = 0
+        
+    def add_movement( self, which_arm: str, pose2go: dict, joint_vel: float, toff: float ):
+        NotImplementedError( )
+        
+    def reset( self ):
+        self.moves   = []
+        self.n_moves = 0 
+
+        
+        
 class Baxter( object ):
 
     # ================================================================ #
@@ -869,6 +886,12 @@ def main():
             my_ctrl = PrintJointController( my_baxter )
             my_ctrl.run( )
 
+
+        # =============================================================== #
+        # ================== TASK IMPEDANCE CONTROLLER ================== #
+        # =============================================================== #
+        elif args.ctrl_type == "cartesian_impedance_controller":
+            my_ctrl = CartesianImpedanceController( my_baxter )
 
 if __name__ == "__main__":
     main()
