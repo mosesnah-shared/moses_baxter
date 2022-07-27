@@ -139,7 +139,7 @@ class JointImpedanceController( Controller ):
         self.type          = "joint_impedance_controller"
         self.is_save_data  = is_save_data
 
-        a   = 0.2 # The ratio between stiffness and dampling
+        a   = 0.2 # The ratio between stiffness and damping
         BqR = { key : a * val for key, val in C.JOINT_IMP_Kq_R.items() }
         BqL = { key : a * val for key, val in C.JOINT_IMP_Kq_L.items() }
 
@@ -794,8 +794,8 @@ def main():
             # POSE_MID_s1    POSE_MID_e1     POSE_MID_w1,  POSE_FINAL_s1,  POSE_FINAL_e1, POSE_FINAL_w1   D1   D2    a, toff = D1 * a
             # pars = [-0.61388889, 0.57       ,-0.675     , -0.25277778, 0.57       , -0.505      , 1.05       , 1.45       , 0.19444444] # DIRECT
             pars = [-0.64213268, 0.33356569 ,-0.46185895, -0.38859129, 0.48006301 , -0.74097092 , 1.34714252 , 0.72278278 , 0.2171941 ] # CRS
-            #
-            #
+
+            
             POSE1_R = C.GRASP_POSE
             POSE1_L = pose_right2left( C.GRASP_POSE  )
             #
