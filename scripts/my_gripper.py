@@ -151,7 +151,7 @@ def main():
 
     arms = (args.gripper,) if args.gripper != 'both' else ('left', 'right')
 
-    grip_ctrls = [GripperConnect(arm, args.lights) for arm in arms]
+    grip_ctrls = [ GripperConnect(arm, args.lights) for arm in arms ]
 
     print("Press cuff buttons to control grippers. Spinning...")
     rospy.spin()
