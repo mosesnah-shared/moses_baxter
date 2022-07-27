@@ -30,15 +30,16 @@ The available options for CTRL_TYPE are as follows:
     GRIP_MIN = 0
 
     # The best upper-lower-bound
-    COLOR_LOWER_BOUND_YELLOW = [  0,  80,   0 ]
-    COLOR_UPPER_BOUND_YELLOW = [ 45, 255, 255 ]
+    COLOR_LOWER_BOUND_YELLOW = [   0,  80,   0 ]
+    COLOR_UPPER_BOUND_YELLOW = [  45, 255, 255 ]
 
-    COLOR_LOWER_BOUND_RED   = [170, 70, 50]
-    COLOR_UPPER_BOUND_RED   = [180,255,255]
+    COLOR_LOWER_BOUND_RED    = [ 170,  70,  50 ]
+    COLOR_UPPER_BOUND_RED    = [ 180, 255, 255 ]
 
-    BASIC_JOINT_NAMES = [       "s0",       "s1",       "e0",       "e1",       "w0",       "w1",       "w2" ]
-    LEFT_JOINT_NAMES  = [  "left_s0",  "left_s1",  "left_e0",  "left_e1",  "left_w0",  "left_w1",  "left_w2" ]
-    RIGHT_JOINT_NAMES = [ "right_s0", "right_s1", "right_e0", "right_e1", "right_w0", "right_w1", "right_w2" ]
+    BASIC_JOINT_NAMES = [ "s0", "s1", "e0", "e1", "w0", "w1", "w2" ]
+    LEFT_JOINT_NAMES  = [  "left_" + joint_name for joint_name in BASIC_JOINT_NAMES ]
+    RIGHT_JOINT_NAMES = [ "right_" + joint_name for joint_name in BASIC_JOINT_NAMES ]
+    
     JOINT_NAMES       = { "left": LEFT_JOINT_NAMES, "right": RIGHT_JOINT_NAMES }
 
     RIGHT2LEFT       = { "right_s0": "left_s0" ,
@@ -58,7 +59,8 @@ The available options for CTRL_TYPE are as follows:
                          "left_w2": "right_w2" }
 
 
-    RIGHT_JOINT_SIGN = { "right_s0": +1, "right_s1": +1, "right_e0": +1, "right_e1": +1, "right_w0": +1, "right_w1": +1, "right_w2": +1 }       # Whether it is plus or minus of the value of the joint
+    # Whether it is plus or minus of the value of the joint
+    RIGHT_JOINT_SIGN = { "right_s0": +1, "right_s1": +1, "right_e0": +1, "right_e1": +1, "right_w0": +1, "right_w1": +1, "right_w2": +1 }       
     LEFT_JOINT_SIGN  = {  "left_s0": -1,  "left_s1": +1,  "left_e0": -1,  "left_e1": +1,  "left_w0": -1,  "left_w1": +1,  "left_w2": -1 }
     JOINT_SIGNS      = {  "right": RIGHT_JOINT_SIGN , "left": LEFT_JOINT_SIGN   }
 

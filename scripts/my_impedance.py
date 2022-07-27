@@ -37,6 +37,10 @@ from moses_baxter.msg import my_msg
 
 np.set_printoptions( linewidth = 4000, precision = 8)
 
+# =================================================== #
+# ================ Utility Functions ================ #
+# =================================================== #
+
 def pose_right2left( pose: dict ):
     """
         Changing the dictionary key's prefix name from "right_" to "left_", and flipping the sign too
@@ -46,70 +50,88 @@ def pose_right2left( pose: dict ):
         Arguments:
             [1] pose ( dict ): 7-element dictionary with keys "right_" + s0, s1, e0, e1, w0, w1, w2
     """
+    
     assert all( [ c in pose.keys( ) for c in C.JOINT_NAMES[ "right" ] ] )   # check whether the given dictionary has all the "right_" + s0, s1, e0, e1, w0, w1 and w2 on the keys.
 
     new_pose = dict( )
-
+    
+    # We can write this with a single line, but just for code readability, using the for loop 
     for right_name in C.JOINT_NAMES[ "right" ]:
         left_name = C.RIGHT2LEFT[ right_name ]
         new_pose[ left_name ] = C.LEFT_JOINT_SIGN[ left_name ] * pose[ right_name ]
 
     return new_pose
 
-
-class Controller( object ):
+def dict2arr( my_dict: dict  ):
     """
-        Primitive Controller Object
+        Change the dictionary to array value     
+        
+        Args: 
+            [1] my_dict - should contain joints s0, s1, e0, e1, w0, w1, w2 
+        
     """
 
-    def __init__( self, robot ):
-
-        self.robot = robot
-
-    def gen_dict( self, which_arm: str, arr: np.ndarray ):
-
-        assert which_arm in [ "right", "left" ]
-        assert len( arr ) == 7
-
-        new = dict( )
-
-        for i, joint_name in enumerate( C.JOINT_NAMES[ which_arm ] ):
-            new[ joint_name ] = arr[ i ]
-
-        return new
-
-    def poses_delta( self, which_arm: str, pose1: dict, pose2: dict ):
-        """
-            conduct pose2 - pose1 for each element
-        """
-        assert which_arm in [ "right", "left" ]
-
-        assert all( [ c in pose1.keys( ) for c in C.JOINT_NAMES[ which_arm ] ] )
-        assert all( [ c in pose2.keys( ) for c in C.JOINT_NAMES[ which_arm ] ] )
-
-        return { key: pose2[ key ] - pose1[ key ] for key in pose1.keys( ) }
+    # Check whether s0, s1, e0, e1, w0, w1, w2, which is the list of C.BASIC_JOINT_NAMES are in the my_dict keys
+    
+    assert all( [ c in my_dict.keys( ) for c in C.BASIC_JOINT_NAMES ] ) 
+    
+    # The length of the dictionary must be 7
+    assert len( my_dict ) == 7
+    
+    # If it is contained, then generate a 1x7 array with numbers ordered as s0, s1, e0, e1, w0, w1, w2 
+    return np.array( [ val for key, val in C.BASIC_JOINT_NAMES.items( ) if key in key2 for key2 in my_dict.keys( ) ] )
 
 
-class PrintJointController( Controller ):
+def arr2dict( which_arm: str, arr: np.ndarray ):
+
+    assert which_arm in [ "right", "left" ]
+    assert len( arr ) == 7
+
+    new = dict( )
+
+    for i, joint_name in enumerate( C.JOINT_NAMES[ which_arm ] ):
+        new[ joint_name ] = arr[ i ]
+
+    return new
+
+def poses_delta( which_arm: str, pose1: dict, pose2: dict ):
+    """
+        conduct pose2 - pose1 for each element
+    """
+    assert which_arm in [ "right", "left" ]
+
+    assert all( [ c in pose1.keys( ) for c in C.JOINT_NAMES[ which_arm ] ] )
+    assert all( [ c in pose2.keys( ) for c in C.JOINT_NAMES[ which_arm ] ] )
+
+    return { key: pose2[ key ] - pose1[ key ] for key in pose1.keys( ) }
+
+
+# =================================================== #
+# ==================== Controllers  ================= #
+# =================================================== #
+
+
+class PrintJointController:
     """
         Printing out the joint values by moving around the limbs.
 
-        This controller is useful when we want to design the movements.
+        This controller is useful for debugging.
     """
     def __init__( self, robot ):
 
-        super().__init__( robot )
+        self.robot = robot
         self.type  = "print_joint_controller"
 
     def run( self ):
 
         DONE = False
         while not DONE:
-            typed_letter = baxter_external_devices.getch()
+            typed_letter = baxter_external_devices.getch( )
 
             if typed_letter:
 
-                if typed_letter in ['\x1b', '\x03']:   #catch Esc or ctrl-c
+                # Catch Esc or ctrl-c
+                if typed_letter in ['\x1b', '\x03']:   
                     DONE = True
                     rospy.signal_shutdown( "[LOG] EXITTING PRINT JOINT MODE.")
 
@@ -123,7 +145,145 @@ class PrintJointController( Controller ):
                             print( "'{0}' : {1:.10f},".format( joint_name, joint_angles[ joint_name ] ) )
                     print( "=" * 100 )
 
-class JointImpedanceController( Controller ):
+
+class JointPositionController:
+    """
+        Pure position controller
+        Using innate Baxter function
+            [1] set_joint_position_speed( joint_speed )
+            [2] move_to_joint_positions( pose )
+        to conduct the movements
+
+    """
+
+    def __init__( self, robot ):
+
+        self.robot = robot
+
+        self.type    = "joint_position_controller"
+        self.moves   = []                               # Elements should be dictionary Type
+        self.n_moves = 0
+
+    def add_movement( self, which_arm: str, pose2go: dict, joint_vel: float, toff: float ):
+        """
+            Adding details of the movement to be conducted
+            The problem of this controller is that we cannot move both limbs simultaneously.
+            Hence each right/left limb will move separately.
+
+            Arguments:
+                [1] which_arm (str)   : Either "right" or "left"
+                [2] pose2go   (dict)  : Keys "which_arm" + s0, s1, e0, e1, w0, w1, w2 with corresponding values.
+                                        Note that the keys between "which_arm" and "pose2go" should match each other.
+                [3] joint_vel (float) : Ranged (0,1) and argument for "set_joint_position_speed" method
+                [4] toff      (float) : time offset with respect to the previous movements, must be nonnegative
+        """
+
+        assert which_arm in [ "right", "left" ]
+        assert all( [ c in pose2go.keys( ) for c in C.JOINT_NAMES[ which_arm ] ] )   # check whether the given dictionary has all the "right_" + s0, s1, e0, e1, w0, w1 and w2 on the keys.
+        assert joint_vel >= 0 and joint_vel <= 1
+        assert      toff >= 0
+
+        # Generating the movement details
+        move = dict( )
+        move[ "which_arm" ] = which_arm
+        move[ "pose"      ] = pose2go
+        move[ "joint_vel" ] = joint_vel
+        move[ "toff"      ] = toff
+
+        # Adding the movement details
+        self.moves.append( move )
+        self.n_moves += 1
+
+    def reset( self ):
+        # Emptying out all the movements
+        self.moves   = []
+        self.n_moves = 0
+
+    def run( self ):
+        """
+            Once finish adding the movements, initiate the movements
+        """
+
+        assert self.n_moves >= 1
+
+        # Initiating the movements step by step\
+        for i, move in enumerate( self.moves ) :
+
+            print( "[LOG] INITIATING THE {0:}-th movement".format( i + 1 ) )
+
+            which_arm = move[ "which_arm" ]
+            pose      = move[ "pose"      ]
+            vel       = move[ "joint_vel" ]
+            toff      = move[ "toff"      ]
+
+            self.robot.arms[ which_arm ].set_joint_position_speed( vel )
+            self.robot.arms[ which_arm ].move_to_joint_positions( pose )
+            rospy.sleep( toff )
+
+
+    def run_example( self, type = "default" ):
+        """
+            Just some simple repertoire for this controller
+        """
+
+        if   type == "default":
+
+            # All the constants are saved in "right" hand, hence should parse the movements a bit
+            POSE1_R = C.GRASP_POSE
+            POSE1_L = pose_right2left( C.GRASP_POSE )
+
+            self.add_movement( which_arm = "right" , pose2go = POSE1_R, joint_vel = 0.2, toff = 5 )
+            self.add_movement( which_arm = "left"  , pose2go = POSE1_L, joint_vel = 0.2, toff = 5 )
+
+            POSE2_R = C.LIFT_POSE
+            POSE2_L = pose_right2left( C.LIFT_POSE )
+
+            self.add_movement( which_arm = "left"  , pose2go = POSE2_L , joint_vel = 0.2, toff = 5 )
+            self.add_movement( which_arm = "right" , pose2go = POSE2_R , joint_vel = 0.2, toff = 5 )
+
+            POSE3_R = C.FINAL_POSE
+            POSE3_L = pose_right2left( C.FINAL_POSE )
+
+            self.add_movement( which_arm = "right" , pose2go = POSE3_R, joint_vel = 0.2, toff = 5 )
+            self.add_movement( which_arm = "left"  , pose2go = POSE3_L, joint_vel = 0.2, toff = 5 )
+
+            self.run( )
+
+        elif type == "swing":
+            pass
+
+        else:
+            pass
+
+        self.reset( )
+                    
+                    
+# =================================================== #
+# =========== Impeadnce Controllers  ================ #
+# =================================================== #                    
+
+class ImpedanceController( object ):
+    """
+        Primitive Impedance Controller Object
+    """
+
+    def __init__( self, robot, which_arm  ):
+
+        self.robot = robot
+        
+        assert which_arm in [ "right", "left" ]
+        self.which_arm = which_arm 
+        
+
+    def calc_torque( self, t: float ):
+        """
+            Return the torque value at given time t 
+            
+        """
+        NotImplementedError( )
+                            
+
+class JointImpedanceController( ImpedanceController ):
     """
         1st-order joint-space impedance controller
         The equation is as follows:
@@ -132,15 +292,19 @@ class JointImpedanceController( Controller ):
         tau_G, the gravity compensation torque is conducted by Baxter alone
     """
 
-    def __init__( self, robot, is_save_data = False ):
+    def __init__( self, robot, which_arm : str, Kq: np.ndarray, Bq: np.ndarray, is_save_data:bool = False ):
 
         super().__init__( robot )
         self.type          = "joint_impedance_controller"
         self.is_save_data  = is_save_data
-
+        
+        # Assert that the which_arm is either "right" or "left"
+        assert which_arm in [ "right", "left" ]
+        self.which_arm = which_arm  
+        
         a   = 0.2 # The ratio between stiffness and damping
-        BqR = { key : a * val for key, val in C.JOINT_IMP_Kq_R.items() }
-        BqL = { key : a * val for key, val in C.JOINT_IMP_Kq_L.items() }
+        BqR = { key : a * val for key, val in C.JOINT_IMP_Kq_R.items( ) }
+        BqL = { key : a * val for key, val in C.JOINT_IMP_Kq_L.items( ) }
 
         # Since the left and right moves can be conducted independently, also saving the values independently
         self.Kq      = { "right": C.JOINT_IMP_Kq_R , "left": C.JOINT_IMP_Kq_L }
@@ -395,119 +559,7 @@ class JointImpedanceController( Controller ):
         self.reset( ) # Once the movement is initiated, reset the whole data
 
 
-class JointPositionController( Controller ):
-    """
-        Pure position controller
-        Using innate Baxter function
-            [1] set_joint_position_speed( joint_speed )
-            [2] move_to_joint_positions( pose )
-        to conduct the movements
-
-    """
-
-    def __init__( self, robot ):
-
-        super().__init__( robot )
-
-        self.type    = "joint_position_controller"
-        self.moves   = []                               # Elements should be dictionary Type
-        self.n_moves = 0
-
-    def add_movement( self, which_arm: str, pose2go: dict, joint_vel: float, toff: float ):
-        """
-            Adding details of the movement to be conducted
-            The problem of this controller is that we cannot move both limbs simultaneously.
-            Hence each right/left limb will move separately.
-
-            Arguments:
-                [1] which_arm (str)   : Either "right" or "left"
-                [2] pose2go   (dict)  : Keys "which_arm" + s0, s1, e0, e1, w0, w1, w2 with corresponding values.
-                                        Note that the keys between "which_arm" and "pose2go" should match each other.
-                [3] joint_vel (float) : Ranged (0,1) and argument for "set_joint_position_speed" method
-                [4] toff      (float) : time offset with respect to the previous movements, must be nonnegative
-        """
-
-        assert which_arm in [ "right", "left" ]
-        assert all( [ c in pose2go.keys( ) for c in C.JOINT_NAMES[ which_arm ] ] )   # check whether the given dictionary has all the "right_" + s0, s1, e0, e1, w0, w1 and w2 on the keys.
-        assert joint_vel >= 0 and joint_vel <= 1
-        assert      toff >= 0
-
-        # Generating the movement details
-        move = dict( )
-        move[ "which_arm" ] = which_arm
-        move[ "pose"      ] = pose2go
-        move[ "joint_vel" ] = joint_vel
-        move[ "toff"      ] = toff
-
-        # Adding the movement details
-        self.moves.append( move )
-        self.n_moves += 1
-
-    def reset( self ):
-        # Emptying out all the movements
-        self.moves   = []
-        self.n_moves = 0
-
-    def run( self ):
-        """
-            Once finish adding the movements, initiate the movements
-        """
-
-        assert self.n_moves >= 1
-
-        # Initiating the movements step by step\
-        for i, move in enumerate( self.moves ) :
-
-            print( "[LOG] INITIATING THE {0:}-th movement".format( i + 1 ) )
-
-            which_arm = move[ "which_arm" ]
-            pose      = move[ "pose"      ]
-            vel       = move[ "joint_vel" ]
-            toff      = move[ "toff"      ]
-
-            self.robot.arms[ which_arm ].set_joint_position_speed( vel )
-            self.robot.arms[ which_arm ].move_to_joint_positions( pose )
-            rospy.sleep( toff )
-
-
-    def run_example( self, type = "default" ):
-        """
-            Just some simple repertoire for this controller
-        """
-
-        if   type == "default":
-
-            # All the constants are saved in "right" hand, hence should parse the movements a bit
-            POSE1_R = C.GRASP_POSE
-            POSE1_L = pose_right2left( C.GRASP_POSE )
-
-            self.add_movement( which_arm = "right" , pose2go = POSE1_R, joint_vel = 0.2, toff = 5 )
-            self.add_movement( which_arm = "left"  , pose2go = POSE1_L, joint_vel = 0.2, toff = 5 )
-
-            POSE2_R = C.LIFT_POSE
-            POSE2_L = pose_right2left( C.LIFT_POSE )
-
-            self.add_movement( which_arm = "left"  , pose2go = POSE2_L , joint_vel = 0.2, toff = 5 )
-            self.add_movement( which_arm = "right" , pose2go = POSE2_R , joint_vel = 0.2, toff = 5 )
-
-            POSE3_R = C.FINAL_POSE
-            POSE3_L = pose_right2left( C.FINAL_POSE )
-
-            self.add_movement( which_arm = "right" , pose2go = POSE3_R, joint_vel = 0.2, toff = 5 )
-            self.add_movement( which_arm = "left"  , pose2go = POSE3_L, joint_vel = 0.2, toff = 5 )
-
-            self.run( )
-
-        elif type == "swing":
-            pass
-
-        else:
-            pass
-
-        self.reset( )
-
-
-class CartesianImpedanceController( Controller ):
+class CartesianImpedanceController( ImpedanceController ):
     
     def __init__( self, robot ):
         super().__init__( robot )
@@ -597,10 +649,6 @@ class Baxter( object ):
 
             self.rs.disable()
 
-    # ---------------------------------------------------------------- #
-    # ------------------------ INIT  FUNCTIONS ----------------------- #
-    # ---------------------------------------------------------------- #
-
     # ================================================================ #
     # ======================== BASIC FUNCTIONS ======================= #
     # ================================================================ #
@@ -634,23 +682,17 @@ class Baxter( object ):
 def main():
 
     parser  = argparse.ArgumentParser( formatter_class = argparse.RawTextHelpFormatter )
-    parser.add_argument('-s', '--save_data',
-                        dest = 'save_data',   action = 'store_true',
-                        help = 'Save the Data')
-
-    parser.add_argument('-o', '--run_optimization',
-                        dest = 'is_run_optimization',    action = 'store_true',
-                        help = 'Running the optimization of the whole process')
-
-    parser.add_argument('-c', '--controller',
-                        dest = 'ctrl_type',    action = 'store', type = str,
-                        help = C.CONTROLLER_DESCRIPTIONS )
-
-
+    parser.add_argument('-s', '--save_data'        , dest = 'is_save_data'        , action = 'store_true' ,              help = 'Save the Data'                                   )
+    parser.add_argument('-o', '--run_optimization' , dest = 'is_run_optimization' , action = 'store_true' ,              help = 'Running the optimization of the whole process'   )
+    parser.add_argument('-c', '--controller'       , dest = 'ctrl_type'           , action = 'store'      , type =  str, help = C.CONTROLLER_DESCRIPTIONS                         )
     args = parser.parse_args( rospy.myargv( )[ 1: ] )
 
+
+    print( dict2arr(  C.REST_POSE  ) )
+    exit( )
+
     print( "Initializing node... " )
-    rospy.init_node( "impedance_control_right" )
+    rospy.init_node( "impedance_control" )
     my_baxter = Baxter( args )
     rospy.on_shutdown( my_baxter.clean_shutdown )
 
@@ -777,6 +819,8 @@ def main():
         xopt = opt.optimize( init )                                             # Start at the mid-point of the lower and upper bound
 
         my_log.log.close()
+        
+        
     # ============================================================================= #
     # ============================= NORMAL EXECUTION ============================== #
     # ============================================================================= #
@@ -789,6 +833,14 @@ def main():
         if   args.ctrl_type == "joint_position_controller":
             my_ctrl = JointPositionController( my_baxter )
             my_ctrl.run_example( type = "default" )
+
+        # =============================================================== #
+        # ================== PRINT JOINT CONTROLLER ===================== #
+        # =============================================================== #
+
+        elif args.ctrl_type == "print_joint_controller":
+            my_ctrl = PrintJointController( my_baxter )
+            my_ctrl.run( )
 
 
         # =============================================================== #
@@ -876,15 +928,6 @@ def main():
             #
 
             # my_log.log.close()
-
-
-        # =============================================================== #
-        # ================== PRINT JOINT CONTROLLER ===================== #
-        # =============================================================== #
-
-        elif args.ctrl_type == "print_joint_controller":
-            my_ctrl = PrintJointController( my_baxter )
-            my_ctrl.run( )
 
 
         # =============================================================== #
