@@ -1,3 +1,5 @@
+import numpy as np
+
 class Constants:
     PROJECT_NAME            = '[M3X] BAXTER Project'
     VERSION                 = '1.0.1'
@@ -40,23 +42,10 @@ The available options for CTRL_TYPE are as follows:
     LEFT_JOINT_NAMES  = [  "left_" + joint_name for joint_name in BASIC_JOINT_NAMES ]
     RIGHT_JOINT_NAMES = [ "right_" + joint_name for joint_name in BASIC_JOINT_NAMES ]
     
-    JOINT_NAMES       = { "left": LEFT_JOINT_NAMES, "right": RIGHT_JOINT_NAMES }
+    JOINT_NAMES = { "left": LEFT_JOINT_NAMES, "right": RIGHT_JOINT_NAMES }
 
-    RIGHT2LEFT       = { "right_s0": "left_s0" ,
-                         "right_s1": "left_s1" ,
-                         "right_e0": "left_e0" ,
-                         "right_e1": "left_e1" ,
-                         "right_w0": "left_w0" ,
-                         "right_w1": "left_w1" ,
-                         "right_w2": "left_w2" }
-
-    LEFT2RIGHT       = { "left_s0": "right_s0" ,
-                         "left_s1": "right_s1" ,
-                         "left_e0": "right_e0" ,
-                         "left_e1": "right_e1" ,
-                         "left_w0": "right_w0" ,
-                         "left_w1": "right_w1" ,
-                         "left_w2": "right_w2" }
+    RIGHT2LEFT = { right_name:  left_name for right_name,  left_name in zip( RIGHT_JOINT_NAMES,  LEFT_JOINT_NAMES ) }
+    LEFT2RIGHT = {  left_name: right_name for  left_name, right_name in zip(  LEFT_JOINT_NAMES, RIGHT_JOINT_NAMES ) }
 
 
     # Whether it is plus or minus of the value of the joint
@@ -132,6 +121,7 @@ The available options for CTRL_TYPE are as follows:
                         'right_w0':  3.0,
                         'right_w1': 10.0,
                         'right_w2':  1.5 }
+
 
     JOINT_IMP_Kq_L  = {  'left_s0': 15.0,
                          'left_s1': 15.0,
