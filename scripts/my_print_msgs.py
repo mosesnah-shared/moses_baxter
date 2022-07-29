@@ -42,7 +42,7 @@ class Logger( object ):
 class Listener( ):
     def __init__( self ):
         self.node = rospy.init_node(  'my_listener', anonymous = True )
-        self.sub  = rospy.Subscriber( "my_baxter" , my_msg, self.callback  )
+        self.sub  = rospy.Subscriber( "my_msg_print" , my_msg, self.callback  )
 
         self.r    = rospy.Rate( 20 )  # 20Hz
         self.on   = True
@@ -53,17 +53,17 @@ class Listener( ):
     def callback( self, data ):
         self.on = data.on
 
-        print( "[time] {:.7f} [qo_L]   {:}".format( data.stamp, '(' + ', '.join( ('%.6f' % f ) for f in data.q0_L   ) + ')' )  )
-        print( "[time] {:.7f} [dqo_L]  {:}".format( data.stamp, '(' + ', '.join( ('%.6f' % f ) for f in data.dq0_L  ) + ')' )  )
-        print( "[time] {:.7f} [q_L]    {:}".format( data.stamp, '(' + ', '.join( ('%.6f' % f ) for f in data.q_L    ) + ')' )  )
-        print( "[time] {:.7f} [dq_L]   {:}".format( data.stamp, '(' + ', '.join( ('%.6f' % f ) for f in data.dq_L   ) + ')' )  )
-        print( "[time] {:.7f} [tau_L]  {:}".format( data.stamp, '(' + ', '.join( ('%.6f' % f ) for f in data.tau_L  ) + ')' )  )
+        print( "[name] { }  [time] {:.7f} [qo_L]   {:}".format( data.name, data.stamp, '(' + ', '.join( ('%.6f' % f ) for f in data.q0_L   ) + ')' )  )
+        print( "[name] { }  [time] {:.7f} [dqo_L]  {:}".format( data.name, data.stamp, '(' + ', '.join( ('%.6f' % f ) for f in data.dq0_L  ) + ')' )  )
+        print( "[name] { }  [time] {:.7f} [q_L]    {:}".format( data.name, data.stamp, '(' + ', '.join( ('%.6f' % f ) for f in data.q_L    ) + ')' )  )
+        print( "[name] { }  [time] {:.7f} [dq_L]   {:}".format( data.name, data.stamp, '(' + ', '.join( ('%.6f' % f ) for f in data.dq_L   ) + ')' )  )
+        print( "[name] { }  [time] {:.7f} [tau_L]  {:}".format( data.name, data.stamp, '(' + ', '.join( ('%.6f' % f ) for f in data.tau_L  ) + ')' )  )
 
-        print( "[time] {:.7f} [qo_R]   {:}".format( data.stamp, '(' + ', '.join( ('%.6f' % f ) for f in data.q0_R   ) + ')' )  )
-        print( "[time] {:.7f} [dqo_R]  {:}".format( data.stamp, '(' + ', '.join( ('%.6f' % f ) for f in data.dq0_R  ) + ')' )  )
-        print( "[time] {:.7f} [q_R]    {:}".format( data.stamp, '(' + ', '.join( ('%.6f' % f ) for f in data.q_R    ) + ')' )  )
-        print( "[time] {:.7f} [dq_R]   {:}".format( data.stamp, '(' + ', '.join( ('%.6f' % f ) for f in data.dq_R   ) + ')' )  )
-        print( "[time] {:.7f} [tau_R]  {:}".format( data.stamp, '(' + ', '.join( ('%.6f' % f ) for f in data.tau_R  ) + ')' )  )
+        print( "[name] { }  [time] {:.7f} [qo_R]   {:}".format( data.name, data.stamp, '(' + ', '.join( ('%.6f' % f ) for f in data.q0_R   ) + ')' )  )
+        print( "[name] { }  [time] {:.7f} [dqo_R]  {:}".format( data.name, data.stamp, '(' + ', '.join( ('%.6f' % f ) for f in data.dq0_R  ) + ')' )  )
+        print( "[name] { }  [time] {:.7f} [q_R]    {:}".format( data.name, data.stamp, '(' + ', '.join( ('%.6f' % f ) for f in data.q_R    ) + ')' )  )
+        print( "[name] { }  [time] {:.7f} [dq_R]   {:}".format( data.name, data.stamp, '(' + ', '.join( ('%.6f' % f ) for f in data.dq_R   ) + ')' )  )
+        print( "[name] { }  [time] {:.7f} [tau_R]  {:}".format( data.name, data.stamp, '(' + ', '.join( ('%.6f' % f ) for f in data.tau_R  ) + ')' )  )
 
 
     def listen( self ):

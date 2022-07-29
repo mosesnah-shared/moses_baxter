@@ -9,6 +9,8 @@
 #std_msgs/Header
 
 float64 stamp
+string name
+string which_arm
 
 # [Moses C. Nah] [2022.04.17]
 #     - This is required to record the data just before and after the initiation.
@@ -16,16 +18,11 @@ float64 stamp
 #     - Will be great to know in case if there is a better alternative than introducing a new argument
 bool on
 
-# Right hand Data
-float64[7]  q0_R
-float64[7] dq0_R
-float64[7]   q_R
-float64[7]  dq_R
-float64[7] tau_R
-
-# Left hand Data
-float64[7]  q0_L
-float64[7] dq0_L
-float64[7]   q_L
-float64[7]  dq_L
-float64[7] tau_L
+# Details 
+float64[]  x0
+float64[] dx0
+float64[]   x
+float64[]  dx
+float64[]   K
+float64[]   B
+float64[] tau

@@ -6,13 +6,7 @@ import numpy as np
 
 from my_constants import Constants as C
 
-from baxter_interface import (
-    DigitalIO,
-    Gripper,
-    Navigator,
-    CHECK_VERSION,
-)
-
+from baxter_interface import DigitalIO, Gripper, Navigator, CHECK_VERSION 
 
 def min_jerk_traj( t: float, ti: float, tf: float, pi: float, pf: float, D: float ):
     """

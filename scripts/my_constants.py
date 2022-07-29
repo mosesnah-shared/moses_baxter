@@ -1,5 +1,3 @@
-import numpy as np
-
 class Constants:
     PROJECT_NAME            = '[M3X] BAXTER Project'
     VERSION                 = '1.0.1'
@@ -19,6 +17,7 @@ The available options for CTRL_TYPE are as follows:
 
 [2] joint_impedance_controller:
     - We use a first-order impedance controller with gravity compensation
+    - i.e., tau = Kq (q0 - q ) + Bq ( dq0 -dq )
 
 [3] print_joint_controller
     - You can freely move around the limbs and print the joint details by pressing "p" of the keyboard
