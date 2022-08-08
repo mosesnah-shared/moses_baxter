@@ -187,23 +187,27 @@ def main():
             imp1.setup( Kq = Kq_mat, Bq = Bq_mat, qi = qi, qf = qf, D = D1, ti = 0 )
             
             # Offset of the 2nd movement 
-            alpha = -0.3
+            # alpha = -0.3
             
-            # Second Impedance
-            imp2 = JointImpedanceController( my_baxter, "right" )
-            qi = np.zeros( 7 )
-            qf = poses_delta( "right", C.MID_POSE, C.FINAL_POSE )
-            D2 = 2.0
-            imp2.setup( Kq = Kq_mat, Bq = Bq_mat, qi = qi, qf = qf, D = D2, ti = ( 1 + alpha ) * D1 )
+            # # Second Impedance
+            # imp2 = JointImpedanceController( my_baxter, "right" )
+            # qi = np.zeros( 7 )
+            # qf = poses_delta( "right", C.MID_POSE, C.FINAL_POSE )
+            # D2 = 2.0
+            # imp2.setup( Kq = Kq_mat, Bq = Bq_mat, qi = qi, qf = qf, D = D2, ti = ( 1 + alpha ) * D1 )
             
-            # Saving these impedances as an array to iterate over 
-            imp_arr = [ imp1, imp2 ]
+            # # Saving these impedances as an array to iterate over 
+            # imp_arr = [ imp1, imp2 ]
             
             # Setup Complete, initiate the movement
             # The initial time for the simulation
             ts = rospy.Time.now( )
             t  = 0
-                                
+            
+            
+            # ============================================== #
+            # ========= THE MAIN LOOP FOR THE CTRL ========= #
+            # ============================================== #
             while not rospy.is_shutdown( ) and t <= 10:
 
                 if not my_baxter.rs.state( ).enabled:
@@ -220,13 +224,16 @@ def main():
                 for imp in imp_arr:
                     
                     if   imp.which_arm == "right":
-                        tau_R += imp.calc_torque( t )
+                        tau, q0, dq0, q, dq = imp.calc_torque( t )
+                        tau_R += tau
                         
                     elif imp.which_arm == "left":
-                        tau_L += imp.calc_torque( t )
-
-                my_baxter.arms[ "right" ].set_joint_torques( arr2dict( "right", tau_R ) )
-                my_baxter.arms[ "left"  ].set_joint_torques( arr2dict(  "left", tau_L ) )
+                        tau, q0, dq0, q, dq = imp.calc_torque( t )
+                        tau_L += tau
+                        
+                
+                # my_baxter.arms[ "right" ].set_joint_torques( arr2dict( "right", tau_R ) )
+                # my_baxter.arms[ "left"  ].set_joint_torques( arr2dict(  "left", tau_L ) )
 
                 # [Moses C. Nah]
                 # DO NOT ERASE!! Erasing it will lead to unstable controller

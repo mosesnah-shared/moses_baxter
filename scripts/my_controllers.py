@@ -1,13 +1,14 @@
 #!/usr/bin/python3
 
 import rospy
+import scipy.io
 import numpy             as np
 import matplotlib.pyplot as plt
 
 # Local Library, under moses/scripts
 from my_robot     import Baxter
 from my_constants import Constants as C
-from my_utils     import min_jerk_traj, pose_right2left, dict2arr, poses_delta
+from my_utils     import min_jerk_traj, pose_right2left, dict2arr, poses_delta, make_dir
 
 # Baxter Library
 import baxter_external_devices  
@@ -210,13 +211,16 @@ class JointImpedanceController( ImpedanceController ):
         tau_G, the gravity compensation torque is conducted by Baxter alone
     """
 
-    def __init__( self, robot, which_arm : str, name : str ):
+    def __init__( self, robot, which_arm : str, name : str, is_save_data : bool ):
 
         super().__init__( robot, which_arm )
         self.type           = "joint_impedance_controller"
         self.name           = name + "_" + self.type
         self.ctrl_par_names = [ "Kq", "Bq", "qi", "qf", "D", "ti" ]
+        self.is_save_data   = is_save_data
         
+        # The number samples for the data
+        self.Ns = 2 ** 15
         
         # Initialize all the ctrl_par_names to None
         [ setattr( self, key, None ) for key in self.ctrl_par_names ]
@@ -248,6 +252,18 @@ class JointImpedanceController( ImpedanceController ):
 
         # Double check whether the values are assigned 
         assert all( [ getattr( self, c ) is not None for c in self.ctrl_par_names ]  )
+        
+        # The data array for saving the data 
+        self.t_arr   = np.zeros( self.Ns )
+        self.q_arr   = np.zeros( ( 7, self.Ns ) )
+        self.dq_arr  = np.zeros( ( 7, self.Ns ) )
+        self.q0_arr  = np.zeros( ( 7, self.Ns ) )
+        self.dq0_arr = np.zeros( ( 7, self.Ns ) )
+        self.tau_arr = np.zeros( ( 7, self.Ns ) )
+        
+        # The data pointer that we will use for saving the data 
+        self.idx_data = 0 
+        
 
     def calc_torque( self, t: float ):
         """
@@ -268,11 +284,7 @@ class JointImpedanceController( ImpedanceController ):
         q0  = np.zeros( 7 )
         dq0 = np.zeros( 7 )
         
-        # Calculate the ZFT for given time t
-        print(  "t",       t )
-        print( "qi", self.qi )
-        print( "qf", self.qf )
-        
+
         for i in range( 7 ): 
             ZFT_pos, ZFT_vel = min_jerk_traj( t, self.ti, self.ti + self.D, self.qi[ i ], self.qf[ i ], self.D )
             q0[  i ] = ZFT_pos
@@ -280,10 +292,34 @@ class JointImpedanceController( ImpedanceController ):
             
         # Calculate the torque which should be inputed. 
         tau = self.Kq @ ( q0 - q ) + self.Bq @ ( dq0 - dq )
+        
+        if self.is_save_data:
+            self.t_arr[      self.idx_data ] = t
+            self.q_arr[   :, self.idx_data ] = q
+            self.dq_arr[  :, self.idx_data ] = dq
+            self.q0_arr[  :, self.idx_data ] = q0
+            self.dq0_arr[ :, self.idx_data ] = dq0
+            self.tau_arr[ :, self.idx_data ] = tau
+            
+            self.idx_data += 1
 
-        return tau, q0, dq0, q, dq
+        return tau
     
-   
+    
+    # [TODO] We can include this method on the parent class and be succinct. 
+    def publish_data( self, dir_name: str ):
+        # Printing out all the details of the simulation as a file that is great for MATLAB compatability
+        file_name = dir_name + "/" + self.name + ".mat"
+        scipy.io.savemat( file_name, { 'name': self.name, 
+                                       'time': self.t_arr[      :self.idx_data ], 
+                                          'q': self.q_arr[   :, :self.idx_data ], 
+                                         'dq': self.dq_arr[  :, :self.idx_data ], 
+                                         'q0': self.q0_arr[  :, :self.idx_data ], 
+                                        'dq0': self.dq0_arr[ :, :self.idx_data ], 
+                                        'tau': self.tau_arr[ :, :self.idx_data ],
+                                         'Kq': self.Kq, 'Bq': self.Bq }  )
+        
+        
 class CartesianImpedanceController( ImpedanceController ):
     
     def __init__( self, robot, which_arm : str ):
@@ -337,59 +373,47 @@ if __name__ == "__main__":
     Bq_mat = 0.2 * Kq_mat
 
     # First Impedance
-    imp1 = JointImpedanceController( my_baxter, "right", "ctrl1" )
+    imp1 = JointImpedanceController( my_baxter, "right", "imp1", is_save_data = True )
     qi = dict2arr( "right", C.GRASP_POSE )
     qf = dict2arr( "right", C.MID_POSE   )
     D1 = 1.0
     imp1.setup( Kq = Kq_mat, Bq = Bq_mat, qi = qi, qf = qf, D = D1, ti = 0 )
     
     # Offset of the 2nd movement 
-    alpha = -0.3
+    alpha = -0.5
     
-    # Second Impedance
-    imp2 = JointImpedanceController( my_baxter, "right", "ctrl2" )
+    # # Second Impedance
+    imp2 = JointImpedanceController( my_baxter, "right", "imp2", is_save_data = True )
     qi = np.zeros( 7 )
     qf = dict2arr( "right", poses_delta( "right", C.MID_POSE, C.FINAL_POSE ) )
-    D2 = 2.0
+    D2 = 1.0
     imp2.setup( Kq = Kq_mat, Bq = Bq_mat, qi = qi, qf = qf, D = D2, ti = ( 1 + alpha ) * D1 )
     
     # Saving these impedances as an array to iterate over 
-    imp_arr = [ imp1, imp2 ]
+    imp_arr  = [ imp1, imp2 ]
     
-    # Check whether you will publish the data or not.
-    is_publish_data = True
-    
-    if is_publish_data:
-        pub = rospy.Publisher( 'my_msg_print' , my_msg ) 
-        msg    = my_msg()
-        msg.on = True
 
-    for t in np.linspace( 0, 8, 100 ):
+    for t in np.linspace( 0, 3, 1000 ):
         
         tau = { "right": np.zeros( 7 ), "left": np.zeros( 7 ) }
         
+        # Iterating over the impedances 
         for imp in imp_arr:
             
             # Calculate the Torque of the arm 
-            tmp_tau, q0, dq0, q, dq = imp.calc_torque( t )
+            tmp_tau = imp.calc_torque( t )
             tau[ imp.which_arm ] += tmp_tau 
 
-        if is_publish_data:
-            
-            msg.stamp = t
-            
-            msg.x   = q 
-            msg.dx  = dq 
-            msg.x0  = q0 
-            msg.dx0 = dq0 
+        # if is_publish_data:        
+        my_baxter.control_rate.sleep( )
 
-            msg.K   = imp.Kq.flatten( )
-            msg.B   = imp.Bq.flatten( )
-            
-            msg.tau = tmp_tau
-            
-            msg.name      = imp.name
-            msg.which_arm = imp.which_arm
-            
-            pub.publish( msg )
-            
+    # After finishing the movement, publishing the data 
+    # The number of impedances should match the message
+    # Each Impedance Must have an independent Message
+    # Check whether you will publish the data or not.
+    dir_name = make_dir( )
+    
+    for imp in imp_arr:
+        imp.publish_data( dir_name = dir_name )
+        
+    

@@ -1,7 +1,8 @@
-
-import time
+import os
 import sys
+import time
 import rospy
+import datetime
 import numpy as np
 
 from my_constants import Constants as C
@@ -113,6 +114,22 @@ def poses_delta( which_arm: str, pose1: dict, pose2: dict ):
     assert all( [ c in pose2.keys( ) for c in C.JOINT_NAMES[ which_arm ] ] )
 
     return { key: pose2[ key ] - pose1[ key ] for key in pose1.keys( ) }
+
+
+def make_dir( ):
+    
+    dir_name  = C.SAVE_DIR + datetime.datetime.now().strftime( '%Y_%m_%d' )
+    
+    if not os.path.exists( dir_name ):
+        os.mkdir( dir_name )
+        
+    # After making the directory, then generating a subdirectory including h_m_s
+    sub_dir_name = dir_name + "/" + datetime.datetime.now().strftime( '%Y%m%d_%H%M%S' )
+    
+    if not os.path.exists( sub_dir_name ):
+        os.mkdir( sub_dir_name )
+        
+    return sub_dir_name
 
 
 class GripperConnect( object ):
