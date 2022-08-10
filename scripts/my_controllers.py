@@ -216,30 +216,45 @@ class JointImpedanceController( ImpedanceController ):
         super().__init__( robot, which_arm )
         self.type           = "joint_impedance_controller"
         self.name           = name + "_" + self.type
-        self.ctrl_par_names = [ "Kq", "Bq", "qi", "qf", "D", "ti" ]
         self.is_save_data   = is_save_data
+        
+        # The number of submovements for the ZFT
+        self.n_act = 0 
         
         # The number samples for the data
         self.Ns = 2 ** 15
+
+        # Controller Parameters of the Controller 
+        # Impedances
+        self.Kq = None
+        self.Bq = None
         
-        # Initialize all the ctrl_par_names to None
-        [ setattr( self, key, None ) for key in self.ctrl_par_names ]
-                
-    def setup( self, Kq, Bq, qi, qf, D, ti ):
-        """
-            Setting up the details of the movement. 
-            
-            This method should be called AFTER calling "set_ctrl_par" method.
-        """
+        # The movement parameters, we save this as an array since multiple submovements may exist
+        self.qi = [ ]
+        self.qf = [ ] 
+        self.D  = [ ]
+        self.ti = [ ]
+
+    def set_impedance( self, Kq:np.ndarray, Bq:np.ndarray ):
+        
+        # Resetting the Kq and Bq will be dangerous, hence asserting. 
+        assert self.Kq is None and self.Bq is None
         
         # Check whether the stiffness and damping matrices are in good shape.
         assert len( Kq ) == 7 and len( Kq[ 0 ] ) == 7 
-        assert len( Bq ) == 7 and len( Bq[ 0 ] ) == 7 
+        assert len( Bq ) == 7 and len( Bq[ 0 ] ) == 7         
 
         # Check whether both matrices are positive definite
         assert np.all( np.linalg.eigvals( Kq ) > 0 )
         assert np.all( np.linalg.eigvals( Bq ) > 0 )
-
+            
+        # If they have passed all the asserts, then saving it as an attribute
+        self.Kq = Kq 
+        self.Bq = Bq 
+        
+        
+    def add_movement( self, qi:np.ndarray, qf:np.ndarray, D:float, ti:float ):
+        
         # Check whether the size of qi and qf are good
         assert len( qi ) == 7
         assert len( qf ) == 7
@@ -247,12 +262,31 @@ class JointImpedanceController( ImpedanceController ):
         # Check whether the D and ti are positive and non-negative, respectively. 
         assert D > 0 and ti >= 0 
         
-        # If all the given data is correct, save those 
-        self.set_ctrl_par( Kq = Kq, Bq = Bq, qi = qi, qf = qf, D = D, ti = ti )
-
-        # Double check whether the values are assigned 
-        assert all( [ getattr( self, c ) is not None for c in self.ctrl_par_names ]  )
+        # If there is more than one movement, then qi must be a zero array. 
+        if self.n_act >= 1: assert np.all( ( qi == 0 ) )
         
+        self.qi.append( qi )
+        self.qf.append( qf )
+        self.D.append( D   )
+        self.ti.append( ti )
+        
+        # Since we have added the new movement, add the number of movements 
+        self.n_act += 1 
+                
+                
+    def setup( self ):
+        """
+            Setting up the details of the movement. 
+            
+            This method should be called AFTER calling "set_ctrl_par" method.
+        """
+
+        # Before Setting, check whether the impedances are defined
+        assert self.Kq is not None and self.Bq is not None 
+        
+        # Check whether the movement is defined 
+        assert self.n_act >= 1 
+
         # The data array for saving the data 
         self.t_arr   = np.zeros( self.Ns )
         self.q_arr   = np.zeros( ( 7, self.Ns ) )
@@ -263,8 +297,8 @@ class JointImpedanceController( ImpedanceController ):
         
         # The data pointer that we will use for saving the data 
         self.idx_data = 0 
-        
 
+            
     def calc_torque( self, t: float ):
         """
             Calculate and return tau, which is:
@@ -284,11 +318,12 @@ class JointImpedanceController( ImpedanceController ):
         q0  = np.zeros( 7 )
         dq0 = np.zeros( 7 )
         
-
-        for i in range( 7 ): 
-            ZFT_pos, ZFT_vel = min_jerk_traj( t, self.ti, self.ti + self.D, self.qi[ i ], self.qf[ i ], self.D )
-            q0[  i ] = ZFT_pos
-            dq0[ i ] = ZFT_vel
+        # Calculating the ZFT trajectory
+        for i in range( self.n_act ): 
+            for j in range( 7 ): 
+                ZFT_pos, ZFT_vel = min_jerk_traj( t, self.ti[ i ], self.ti[ i ] + self.D[ i ], self.qi[ i ][ j ], self.qf[ i ][ j ], self.D[ i ] )
+                q0[  j ] += ZFT_pos
+                dq0[ j ] += ZFT_vel
             
         # Calculate the torque which should be inputed. 
         tau = self.Kq @ ( q0 - q ) + self.Bq @ ( dq0 - dq )
@@ -305,19 +340,24 @@ class JointImpedanceController( ImpedanceController ):
 
         return tau
     
-    
-    # [TODO] We can include this method on the parent class and be succinct. 
     def publish_data( self, dir_name: str ):
         # Printing out all the details of the simulation as a file that is great for MATLAB compatability
         file_name = dir_name + "/" + self.name + ".mat"
+        
+        # [TODO] There will be a single liner to do this, including this in the parent class
         scipy.io.savemat( file_name, { 'name': self.name, 
                                        'time': self.t_arr[      :self.idx_data ], 
+                                         'qi': self.qi, 
+                                         'qf': self.qf,
+                                          'D': self.D, 
+                                         'ti': self.ti, 
                                           'q': self.q_arr[   :, :self.idx_data ], 
                                          'dq': self.dq_arr[  :, :self.idx_data ], 
                                          'q0': self.q0_arr[  :, :self.idx_data ], 
                                         'dq0': self.dq0_arr[ :, :self.idx_data ], 
                                         'tau': self.tau_arr[ :, :self.idx_data ],
                                          'Kq': self.Kq, 'Bq': self.Bq }  )
+        
         
         
 class CartesianImpedanceController( ImpedanceController ):
@@ -369,6 +409,9 @@ if __name__ == "__main__":
 
     # Initializing the Baxter Robot
     my_baxter = Baxter( None )
+    
+    # Flag for saving data
+    is_save_data = False
 
     # Setting up the Impedance Parameters of the Joint
     Kq_mat = np.diag( [ 15.0, 15.0, 8.0, 10.0, 3.0, 10.0, 1.5 ]  )
@@ -379,46 +422,46 @@ if __name__ == "__main__":
     # ============================================================ #
 
     # First RIGHT Impedance
-    impR_1 = JointImpedanceController( my_baxter, which_arm = "right", name = "right_imp1", is_save_data = False )
+    impR_1 = JointImpedanceController( my_baxter, which_arm = "right", name = "right_imp1", is_save_data = is_save_data )
+    impR_1.set_impedance( Kq = Kq_mat, Bq = Bq_mat )
                                     
-    # Setting up the parameters for the simulation                                    
+    # Add the movements                               
     qi = dict2arr( which_arm = "right", my_dict = my_baxter.get_arm_pose( which_arm = "right" ) )
     qf = dict2arr( which_arm = "right", my_dict = C.GRASP_POSE )
     D1 = 3.0
-    impR_1.setup( Kq = Kq_mat, Bq = Bq_mat, qi = qi, qf = qf, D = D1, ti = 2 )
-    
+    impR_1.add_movement( qi = qi, qf = qf, D = D1, ti = 0. )
+
     # Second RIGHT Impedance    
     # Time offset of the 2nd movement 
-    # alpha = 0.5
-    
-    # # Second Impedance
-    # impR_2 = JointImpedanceController( my_baxter, which_arm = "right", name = "right_imp2", is_save_data = False )
-    # qi = np.zeros( 7 )
-    # qf = dict2arr( "right", poses_delta( "right", C.GRASP_POSE, C.REST_POSE ) )
-    # D2 = 3.0
-    # impR_2.setup( Kq = Kq_mat, Bq = Bq_mat, qi = qi, qf = qf, D = D2, ti = ( 1 + alpha ) * D1 )
-    
+    alpha = -0.2
+    qi = np.zeros( 7 )
+    qf = dict2arr( "right", poses_delta( "right", C.GRASP_POSE, C.MID_POSE ) )
+    D2 = 5.0
+    impR_1.add_movement( qi = qi, qf = qf, D = D2, ti = ( 1 + alpha ) * D1 )
+        
     # ============================================================ #
     # =================== LEFT LIMB IMPEDANCES =================== #
     # ============================================================ #
         
-    impL_1 = JointImpedanceController( my_baxter, which_arm = "left", name = "left_imp1", is_save_data = False )
+    impL_1 = JointImpedanceController( my_baxter, which_arm = "left", name = "left_imp1", is_save_data = is_save_data )
+    impL_1.set_impedance( Kq = Kq_mat, Bq = Bq_mat )
     
+    # Add the movements 
     qi = dict2arr( which_arm = "left", my_dict = my_baxter.get_arm_pose( which_arm = "left" ) )
     qf = dict2arr( which_arm = "left", my_dict = pose_right2left( C.GRASP_POSE ) )
-    
     D1 = 3.0
-    impL_1.setup( Kq = Kq_mat, Bq = Bq_mat, qi = qi, qf = qf, D = D1, ti = 0 )    
+    impL_1.add_movement( qi = qi, qf = qf, D = D1, ti = 0. ) 
 
-    
     # Saving these impedances as an array to iterate over 
     imp_arr  = [ impR_1, impL_1 ]
+    
+    for imp in imp_arr: imp.setup( )
     
     ts = rospy.Time.now( )
     t  = 0
     
     # Running the main loop
-    while not rospy.is_shutdown( ) and t <= 9:
+    while not rospy.is_shutdown( ) and t <= 13:
 
         tau = { "right": np.zeros( 7 ), "left": np.zeros( 7 ) }
         
@@ -432,22 +475,19 @@ if __name__ == "__main__":
         for limb_name in [ "right", "left" ]:
             my_baxter.arms[ limb_name ].set_joint_torques( arr2dict( limb_name, arr = tau[ limb_name ]  )  )
             
- 
         # if is_publish_data:        
         my_baxter.control_rate.sleep( )
         
         t = ( rospy.Time.now( ) - ts ).to_sec( )
-
-        
 
 
     # After finishing the movement, publishing the data 
     # The number of impedances should match the message
     # Each Impedance Must have an independent Message
     # Check whether you will publish the data or not.
-    # dir_name = make_dir( )
+    dir_name = make_dir( )
     
-    # for imp in imp_arr:
-    #     imp.publish_data( dir_name = dir_name )
+    for imp in imp_arr:
+        imp.publish_data( dir_name = dir_name )
         
     
