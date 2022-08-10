@@ -80,6 +80,22 @@ class Baxter( object ):
         assert which_arm in [ "right", "left" ]
         return self.arms[ which_arm  ].joint_velocities( )
 
+    def get_end_effector_pos( self, which_arm: str ):
+        assert which_arm in [ "right", "left" ]
+        return self.arms[ which_arm ].endpoint_pose( )[ "position" ]
+
+    def get_end_effector_linear_vel( self, which_arm: str ):
+        assert which_arm in [ "right", "left" ]
+        return self.arms[ which_arm ].endpoint_velocity( )[ "linear" ]
+    
+    def get_end_effector_angular_vel( self, which_arm: str ):
+        assert which_arm in [ "right", "left" ]
+        return self.arms[ which_arm ].endpoint_velocity( )[ "angular" ]
+
+    def get_end_effector_orientation( self, which_arm: str ):
+        assert which_arm in [ "right", "left" ]
+        return self.arms[ which_arm ].endpoint_pose( )[ "orientation" ]
+
     def get_gripper_pos( self, which_arm: str ) :
         assert which_arm in [ "right", "left" ]
         return self.grips[ which_arm ].position( )
@@ -91,20 +107,7 @@ class Baxter( object ):
     def close_gripper( self ):
         self.grips[ "right" ].close(  block = False )
         self.grips[  "left" ].close(  block = False )
-
-    def get_end_effector_pose( self, which_arm : str ):
-        """
-            pose = {'position': (x, y, z), 'orientation': (x, y, z, w)}
-        """
-        assert which_arm in [ "right", "left" ]
-        return self.arms[ which_arm ].endpoint_pose( )
-        
-    def get_end_effector_velocity( self, which_arm : str ):
-        """
-            twist = {'linear': (x, y, z), 'angular': (x, y, z )} 
-        """
-        assert which_arm in [ "right", "left" ]
-        return self.arms[ which_arm ].endpoint_velocity( )        
+     
 
 
 # For Debugging

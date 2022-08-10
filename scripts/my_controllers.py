@@ -19,7 +19,7 @@ from moses_baxter.msg import my_msg
 
 np.set_printoptions( linewidth = 4000, precision = 8)
 
-class PrintJointController:
+class PrintController:
     """
         Printing out the joint values by moving around the limbs.
 
@@ -28,7 +28,7 @@ class PrintJointController:
     def __init__( self, robot ):
 
         self.robot = robot
-        self.type  = "print_joint_controller"
+        self.type  = "print_controller"
 
     def run( self ):
 
@@ -43,7 +43,7 @@ class PrintJointController:
                     DONE = True
                     rospy.signal_shutdown( "[LOG] EXITTING PRINT JOINT MODE.")
 
-                if typed_letter == "p":
+                elif typed_letter == "p":
 
                     print( "=" * 100 )
                     for limb_name in [ "right", "left" ]:
@@ -53,6 +53,15 @@ class PrintJointController:
                             print( "'{0}' : {1:.10f},".format( joint_name, joint_angles[ joint_name ] ) )
                     print( "=" * 100 )
 
+                elif typed_letter == "x":
+
+                    print( "=" * 100 )
+                    # for limb_name in [ "right", "left" ]:
+                    print( self.robot.get_end_effector_pos( "right" ) ) 
+                        # print( self.robot.get_end_effector_linear_vel( limb_name ) ) 
+                        
+
+                    print( "=" * 100 )
 
 # ==== TODO ==== #
 # [2022.07.29] Need to change the code, although the functionality is not used often.
@@ -396,14 +405,18 @@ class CartesianImpedanceController( ImpedanceController ):
         # assert all( [ getattr( self, c ) is not None for c in self.ctrl_par_names ]  )
         NotImplementedError( )
         
+        
     def calc_torque( self, t: float ):
         """
             Calculating the torque equation which is as follows:
+            
+            tau = J^T ( Kx ( x0 - x ) + Bx ( dx0 - dx )  )
         """
         q = self.robot.get_arm_pose( self.which_arm )
         J = self.robot.kins[ self.which_arm ].jacobian( joint_values = q )
     
-
+        # Get the end-effectors position
+        
 # Mainly for Debugging the Robot Controller
 if __name__ == "__main__":
 

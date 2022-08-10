@@ -19,10 +19,8 @@ import matplotlib.pyplot as plt
 from my_robot        import Baxter
 from my_constants    import Constants as C
 from my_utils        import pose_right2left, dict2arr, arr2dict, poses_delta, Logger
-from my_controllers  import PrintJointController, JointPositionController, JointImpedanceController, CartesianImpedanceController
+from my_controllers  import PrintController, JointPositionController, JointImpedanceController, CartesianImpedanceController
 
-# Local Library, customized messages
-from moses_baxter.msg import my_msg
 
 np.set_printoptions( linewidth = 4000, precision = 8)
 
@@ -162,82 +160,94 @@ def main():
 
     elif not args.is_run_optimization:
 
-        # Saving the msg for getting out the details.
-        msg = my_msg( )
-        msg.stamp = t
 
         if   args.ctrl_type == "joint_position_controller":
             my_ctrl = JointPositionController( my_baxter )
             my_ctrl.run_example( type = "default" )
 
-        elif args.ctrl_type == "print_joint_controller":
-            my_ctrl = PrintJointController( my_baxter )
+        elif args.ctrl_type == "print_controller":
+            my_ctrl = PrintController( my_baxter )
             my_ctrl.run( )
 
         elif args.ctrl_type == "joint_impedance_controller":
             
+            # Setting up the Impedance Parameters of the Joint
             Kq_mat = np.diag( [ 15.0, 15.0, 8.0, 10.0, 3.0, 10.0, 1.5 ]  )
             Bq_mat = 0.2 * Kq_mat
 
-            # First Impedance
-            imp1 = JointImpedanceController( my_baxter, "right" )
-            qi = dict2arr( "right", C.GRASP_POSE )
-            qf = dict2arr( "right", C.MID_POSE   )
-            D1 = 1.0
-            imp1.setup( Kq = Kq_mat, Bq = Bq_mat, qi = qi, qf = qf, D = D1, ti = 0 )
+            # ============================================================ #
+            # ================== RIGHT LIMB IMPEDANCES =================== #
+            # ============================================================ #
+
+            # First RIGHT Impedance
+            impR_1 = JointImpedanceController( my_baxter, which_arm = "right", name = "right_imp1", is_save_data = args.is_save_data )
+            impR_1.set_impedance( Kq = Kq_mat, Bq = Bq_mat )
+                                            
+            # Add the movements                               
+            qi = dict2arr( which_arm = "right", my_dict = my_baxter.get_arm_pose( which_arm = "right" ) )
+            qf = dict2arr( which_arm = "right", my_dict = C.GRASP_POSE )
+            D1 = 3.0
+            impR_1.add_movement( qi = qi, qf = qf, D = D1, ti = 0. )
+
+            # Second RIGHT Impedance    
+            # Time offset of the 2nd movement 
+            alpha = -0.2
+            qi = np.zeros( 7 )
+            qf = dict2arr( "right", poses_delta( "right", C.GRASP_POSE, C.MID_POSE ) )
+            D2 = 5.0
+            impR_1.add_movement( qi = qi, qf = qf, D = D2, ti = ( 1 + alpha ) * D1 )
+                
+            # ============================================================ #
+            # =================== LEFT LIMB IMPEDANCES =================== #
+            # ============================================================ #
+                
+            impL_1 = JointImpedanceController( my_baxter, which_arm = "left", name = "left_imp1", is_save_data = args.is_save_data )
+            impL_1.set_impedance( Kq = Kq_mat, Bq = Bq_mat )
             
-            # Offset of the 2nd movement 
-            # alpha = -0.3
+            # Add the movements 
+            qi = dict2arr( which_arm = "left", my_dict = my_baxter.get_arm_pose( which_arm = "left" ) )
+            qf = dict2arr( which_arm = "left", my_dict = pose_right2left( C.GRASP_POSE ) )
+            D1 = 3.0
+            impL_1.add_movement( qi = qi, qf = qf, D = D1, ti = 0. ) 
+
+            # Saving these impedances as an array to iterate over 
+            imp_arr  = [ impR_1, impL_1 ]
             
-            # # Second Impedance
-            # imp2 = JointImpedanceController( my_baxter, "right" )
-            # qi = np.zeros( 7 )
-            # qf = poses_delta( "right", C.MID_POSE, C.FINAL_POSE )
-            # D2 = 2.0
-            # imp2.setup( Kq = Kq_mat, Bq = Bq_mat, qi = qi, qf = qf, D = D2, ti = ( 1 + alpha ) * D1 )
+            for imp in imp_arr: imp.setup( )
             
-            # # Saving these impedances as an array to iterate over 
-            # imp_arr = [ imp1, imp2 ]
-            
-            # Setup Complete, initiate the movement
-            # The initial time for the simulation
             ts = rospy.Time.now( )
             t  = 0
             
-            
-            # ============================================== #
-            # ========= THE MAIN LOOP FOR THE CTRL ========= #
-            # ============================================== #
-            while not rospy.is_shutdown( ) and t <= 10:
+            # Running the main loop
+            while not rospy.is_shutdown( ) and t <= 13:
 
-                if not my_baxter.rs.state( ).enabled:
-                    rospy.logerr( "Impedance example failed to meet, specified control rate timeout." )
-                    break
-
-                # The elapsed time
-                t = ( rospy.Time.now( ) - ts ).to_sec( )
+                tau = { "right": np.zeros( 7 ), "left": np.zeros( 7 ) }
                 
-                tau_R = np.zeros( 7 )
-                tau_L = np.zeros( 7 )
-                
-                # Calculate the torque for both arms 
+                # Iterating over the impedances 
                 for imp in imp_arr:
                     
-                    if   imp.which_arm == "right":
-                        tau, q0, dq0, q, dq = imp.calc_torque( t )
-                        tau_R += tau
-                        
-                    elif imp.which_arm == "left":
-                        tau, q0, dq0, q, dq = imp.calc_torque( t )
-                        tau_L += tau
-                        
-                
-                # my_baxter.arms[ "right" ].set_joint_torques( arr2dict( "right", tau_R ) )
-                # my_baxter.arms[ "left"  ].set_joint_torques( arr2dict(  "left", tau_L ) )
+                    # Calculate the Torque of the arm 
+                    tmp_tau = imp.calc_torque( t )
+                    tau[ imp.which_arm ] += tmp_tau 
 
-                # [Moses C. Nah]
-                # DO NOT ERASE!! Erasing it will lead to unstable controller
+                for limb_name in [ "right", "left" ]:
+                    my_baxter.arms[ limb_name ].set_joint_torques( arr2dict( limb_name, arr = tau[ limb_name ]  )  )
+                    
+                # if is_publish_data:        
                 my_baxter.control_rate.sleep( )
+                
+                t = ( rospy.Time.now( ) - ts ).to_sec( )
+
+
+            # After finishing the movement, publishing the data 
+            # The number of impedances should match the message
+            # Each Impedance Must have an independent Message
+            # Check whether you will publish the data or not.
+            dir_name = make_dir( )
+            
+            for imp in imp_arr:
+                imp.publish_data( dir_name = dir_name )
+                
 
         elif args.ctrl_type == "cartesian_impedance_controller":
             imp1 = CartesianImpedanceController( my_baxter, "right" )
