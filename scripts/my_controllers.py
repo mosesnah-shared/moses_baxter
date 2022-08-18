@@ -13,7 +13,7 @@ from my_utils     import min_jerk_traj, pose_right2left, dict2arr, arr2dict, pos
 # Baxter Library
 import baxter_external_devices  
 
-# Local Message Defined
+# Local Message Defined            
 from moses_baxter.msg import my_msg
 
 
@@ -37,9 +37,9 @@ class PrintController:
             typed_letter = baxter_external_devices.getch( )
 
             if typed_letter:
-
+                            
                 # Catch Esc or ctrl-c
-                if typed_letter in ['\x1b', '\x03']:   
+                if typed_letter in ['\x1b', '\x03']:    
                     DONE = True
                     rospy.signal_shutdown( "[LOG] EXITTING PRINT JOINT MODE.")
 
@@ -80,7 +80,7 @@ class JointPositionController:
         self.robot = robot
 
         self.type    = "joint_position_controller"
-        self.moves   = []                               # Elements should be dictionary Type
+        self.moves   = [ ]                               # Elements should be dictionary Type
         self.n_moves = 0
 
     def add_movement( self, which_arm: str, pose2go: dict, joint_vel: float, toff: float ):
@@ -276,7 +276,7 @@ class JointImpedanceController( ImpedanceController ):
         
         self.qi.append( qi )
         self.qf.append( qf )
-        self.D.append( D   )
+        self.D.append(  D  )
         self.ti.append( ti )
         
         # Since we have added the new movement, add the number of movements 
@@ -371,11 +371,74 @@ class JointImpedanceController( ImpedanceController ):
         
 class CartesianImpedanceController( ImpedanceController ):
     
-    def __init__( self, robot, which_arm : str ):
+    def __init__( self, robot, which_arm : str, which_type: str ):
         
-        super().__init__( robot, which_arm )
+        super( ).__init__( robot, which_arm )
         self.type           = "cartesian_impedance_controller"
         self.ctrl_par_names = [ "Kx", "Bx", "xi", "xf", "D", "ti" ]
+
+        # Check whether the input is position only or position and rotation 
+        assert which_type in [ "pos", "pos_and_rot"]
+        self.which_type = which_type
+        
+        # If position only        , set the size of the matrices as 3
+        # If position and rotation, set the size of the matrices as 6
+        self.n = 3 if which_type == "pos" else 6
+        
+        # The number of submovements for the ZFT
+        self.n_act = 0 
+        
+        # The number samples for the data
+        self.Ns = 2 ** 15
+
+        # Controller Parameters of the Controller 
+        # Task-space Impedances
+        self.Kx = None
+        self.Bx = None
+        
+        # The movement parameters, we save this as an array since multiple submovements may exist
+        self.xi = [ ]
+        self.xf = [ ] 
+        self.D  = [ ]
+        self.ti = [ ]
+            
+    def set_impedance( self, Kx:np.ndarray, Bx:np.ndarray ):
+        
+        # Resetting the Kq and Bq will be dangerous, hence asserting. 
+        assert self.Kx is None and self.Bx is None
+        
+        # Check whether the 2D stiffness and damping matrices are in good shape.
+        assert len( Kx ) == self.n and len( Kx[ 0 ] ) == self.n 
+        assert len( Bx ) == self.n and len( Bx[ 0 ] ) == self.n         
+
+        # Check whether both matrices are positive definite
+        assert np.all( np.linalg.eigvals( Kx ) > 0 )
+        assert np.all( np.linalg.eigvals( Bx ) > 0 )
+            
+        # If they have passed all the asserts, then saving it as an attribute
+        self.Kx = Kx
+        self.Bx = Bx
+        
+    def add_movement( self, xi:np.ndarray, xf:np.ndarray, D:float, ti:float ):
+        
+        # Check whether the size of qi and qf are good
+        assert len( xi ) == self.n
+        assert len( xf ) == self.n
+
+        # Check whether the D and ti are positive and non-negative, respectively. 
+        assert D > 0 and ti >= 0 
+        
+        # If there is more than one movement, then qi must be a zero array. 
+        if self.n_act >= 1: assert np.all( ( xi == 0 ) )
+        
+        self.xi.append( xi )
+        self.xf.append( xf )
+        self.D.append(  D  )
+        self.ti.append( ti )
+        
+        # Since we have added the new movement, add the number of movements 
+        self.n_act += 1              
+    
 
     def setup( self ):
         """
@@ -383,28 +446,28 @@ class CartesianImpedanceController( ImpedanceController ):
             
             This method should be called AFTER calling "set_ctrl_par" method.
         """
-        # Check whether the stiffness and damping matrices are in good shape.
-        # assert len( self.Kx ) == 7 and len( self.Kx[ 0 ] ) == 7 
-        # assert len( self.Bx ) == 7 and len( self.Bx[ 0 ] ) == 7 
 
-        # # Check whether both matrices are positive definite
-        # assert np.all( np.linalg.eigvals( self.Kq ) > 0 )
-        # assert np.all( np.linalg.eigvals( self.Bq ) > 0 )
-
-        # # Check whether the size of qi and qf are good
-        # assert len( self.qi ) == 7
-        # assert len( self.qf ) == 7
-
-        # # Check whether the D and ti are positive and non-negative, respectively. 
-        # assert self.D > 0 and self.ti >= 0 
+        # Before Setting, check whether the impedances are defined
+        assert self.Kq is not None and self.Bq is not None 
         
-        # # If all the given data is correct, save those 
-        # self.set_ctrl_par( Kq = Kq, Bq = Bq, qi = qi, qf = qf, D = D, ti = ti )
+        # Check whether the movement is defined 
+        assert self.n_act >= 1 
 
-        # # Double check whether the values are assigned 
-        # assert all( [ getattr( self, c ) is not None for c in self.ctrl_par_names ]  )
-        NotImplementedError( )
+        # The data array for saving the data 
+        self.t_arr   = np.zeros( self.Ns )
+        self.q_arr   = np.zeros( ( 7, self.Ns ) )
+        self.dq_arr  = np.zeros( ( 7, self.Ns ) )
+        self.q0_arr  = np.zeros( ( 7, self.Ns ) )
+        self.dq0_arr = np.zeros( ( 7, self.Ns ) )
+        self.x_arr   = np.zeros( ( 7, self.Ns ) )
+        self.dx_arr  = np.zeros( ( 6, self.Ns ) )
+        self.x0_arr  = np.zeros( ( self.n, self.Ns ) )
+        self.dx0_arr = np.zeros( ( self.n, self.Ns ) )
+        self.tau_arr = np.zeros( ( 7, self.Ns ) )
         
+        # The data pointer that we will use for saving the data 
+        self.idx_data = 0 
+
         
     def calc_torque( self, t: float ):
         """
@@ -412,10 +475,46 @@ class CartesianImpedanceController( ImpedanceController ):
             
             tau = J^T ( Kx ( x0 - x ) + Bx ( dx0 - dx )  )
         """
-        q = self.robot.get_arm_pose( self.which_arm )
+        
+        q  = self.robot.get_arm_pose( self.which_arm )
+        dq = self.robot.get_arm_velocity( self.which_arm )
+        
+        x  = self.robot.get_end_effector_pos( self.which_arm )
+        dx = self.robot.get_end_effector_linear_vel( self.which_arm )
+        
+        # Get the Jacobian of the linear part 
         J = self.robot.kins[ self.which_arm ].jacobian( joint_values = q )
-    
-        # Get the end-effectors position
+                
+        x0  = np.zeros( 3 )
+        dx0 = np.zeros( 3 ) 
+                
+        # Calculating the linear ZFT trajectory
+        for i in range( self.n_act ): 
+            for j in range( 3 ): 
+                ZFT_pos, ZFT_vel = min_jerk_traj( t, self.ti[ i ], self.ti[ i ] + self.D[ i ], self.xi[ i ][ j ], self.xf[ i ][ j ], self.D[ i ] )
+                x0[  j ] += ZFT_pos
+                dx0[ j ] += ZFT_vel
+            
+        # Get the velocity of the linear part
+        # Calculate the torque which should be inputed. 
+        tau = J.T @ ( self.Kx @ ( x0 - x ) + self.Bx @ ( dx0 - dx ) )
+        
+        # If the type is 
+        if self.which_type == "pos_and_rot":
+            NotImplementedError( )
+        # tau += ROTATION TYPE
+        
+        if self.is_save_data:
+            self.t_arr[      self.idx_data ] = t
+            self.q_arr[   :, self.idx_data ] = q
+            self.dq_arr[  :, self.idx_data ] = dq
+            self.x0_arr[  :, self.idx_data ] = x0
+            self.dx0_arr[ :, self.idx_data ] = dx0
+            self.tau_arr[ :, self.idx_data ] = tau
+            
+            self.idx_data += 1
+
+        return tau
         
 # Mainly for Debugging the Robot Controller
 if __name__ == "__main__":
