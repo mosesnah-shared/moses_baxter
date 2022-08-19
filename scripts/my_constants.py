@@ -86,6 +86,18 @@ The available options for CTRL_TYPE are as follows:
                     'right_w0' : -0.0464029188,
                     'right_w1' :  0.3879126465,
                     'right_w2' : -1.5823011827 }
+    
+    # Posture that is higher than expected
+    GRASP_POSE_UP = {   'right_s0' : 0.6051554208,
+                        'right_s1' : -0.1487961364,
+                        'right_e0' : 0.1376747757,
+                        'right_e1' : 1.3767477571,
+                        'right_w0' : -0.0441019477,
+                        'right_w1' : -1.3341797903,
+                        'right_w2' : -1.7096215881 }
+    
+    # RIGHT HAND SIDE!!
+    GRASP_POSE_UP_EE_POS = [ 1.000504782875165, -0.35706929111501046, 0.05624118812380531 ]
 
     # MID_POSE = {    'right_s0' :  0.7869321442,
     #                 'right_s1' : -0.62405116,
@@ -100,7 +112,7 @@ The available options for CTRL_TYPE are as follows:
                     'right_e0' : -0.0149563127,
                     'right_e1' : 0.3097428536,
                     'right_w0' : -0.0464029188,
-                    'right_w1' : -0.759660457,
+                    'right_w1' : -0.759660457, 
                     'right_w2' : -1.5823011827     }
 
     FINAL_POSE = {  'right_s0' : 0.7869321442,
@@ -130,20 +142,3 @@ The available options for CTRL_TYPE are as follows:
                          'left_w1': 10.0,
                          'left_w2':  1.5 }
 
-    # # Case 1 - original 2022.01.28
-    # Legacy Code
-    # JOINT_IMP_Kq  = { 's0': 10.0,
-    #                   's1': 15.0,
-    #                   'e0':  5.0,
-    #                   'e1': 15.0,
-    #                   'w0':  3.0,
-    #                   'w1':  3.0,
-    #                   'w2':  1.5 }
-    #
-    # JOINT_IMP_Bq  = { 's0': 5.0,
-    #                   's1': 7.5,
-    #                   'e0': 2.5,
-    #                   'e1': 7.5,
-    #                   'w0': 0.1,
-    #                   'w1': 1.5,
-    #                   'w2': 1.5  }
