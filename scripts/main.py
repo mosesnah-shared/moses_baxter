@@ -18,7 +18,7 @@ import matplotlib.pyplot as plt
 # Local Library, under moses/scripts
 from my_robot        import Baxter
 from my_constants    import Constants as C
-from my_utils        import pose_right2left, dict2arr, arr2dict, poses_delta, Logger
+from my_utils        import pose_right2left, dict2arr, arr2dict, poses_delta, Logger, make_dir
 from my_controllers  import PrintController, JointPositionController, JointImpedanceController, CartesianImpedanceController
 
 
@@ -142,7 +142,7 @@ def main():
                 my_ctrl.reset( )
 
             good = np.max( tmp_arr )
-            my_log.write( "[Iteration] " + str( opt.get_numevals( ) + 1) + " [parameters] " + np.array2string( np.array( pars ).flatten(), separator = ',' ) )
+            my_log.write( "[Iteration] " + str( opt.get_numevals( ) + 1 ) + " [parameters] " + np.array2string( np.array( pars ).flatten(), separator = ',' ) )
             my_log.write( " [all_vals] " + np.array2string( np.array( tmp_arr ).flatten(), separator = ',' ) )
             my_log.write( " [obj] " + str( good ) + "\n" )
 
@@ -244,7 +244,7 @@ def main():
             # Each Impedance Must have an independent Message
             # Check whether you will publish the data or not.
             dir_name = make_dir( )
-            
+
             for imp in imp_arr:
                 imp.publish_data( dir_name = dir_name )
                 

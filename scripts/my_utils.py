@@ -75,6 +75,25 @@ def pose_right2left( pose: dict ):
 
     return new_pose
 
+def task_right2left( p: np.ndarray ):
+    """
+        Change the task space 3D position from left to right
+    """
+    
+    # Change the right posture direction 
+    assert len( p ) == 3
+    
+    # Create a new object
+    new_p = np.zeros( 3 )
+    
+    # Flip the y sign
+    new_p[ 0 ] =  p[ 0 ]
+    new_p[ 1 ] = -p[ 1 ]
+    new_p[ 2 ] =  p[ 2 ]
+    
+    return new_p
+
+
 def dict2arr( which_arm: str, my_dict: dict  ):
     """
         Change the dictionary to array value     
