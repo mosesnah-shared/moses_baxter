@@ -231,6 +231,102 @@ class GripperConnect( object ):
     def _is_grippable(self):
         return ( self._gripper.calibrated( ) and self._gripper.ready( ) )
 
+def skew_sym( w ):
+    assert len( w ) == 3
+
+    wtilde = np.zeros( ( 3, 3 ) )
+
+    wtilde[ 0, 1 ] = -w[ 2 ]
+    wtilde[ 0, 2 ] =  w[ 1 ]
+    wtilde[ 2, 1 ] = -w[ 0 ]
+
+    wtilde[ 1, 0 ] =  w[ 2 ]
+    wtilde[ 2, 0 ] = -w[ 1 ]
+    wtilde[ 1, 2 ] =  w[ 0 ]
+
+    return wtilde
+
+def quat2angx( q ):
+
+    assert q[ 0 ] <= 1
+
+    if q[ 0 ] > 0.99:
+        return 0, np.array( [ .0, .0, 1 ])
+
+    theta = 2 * np.arccos( q[ 0 ] )
+
+    axis = np.zeros( 3 )
+
+    axis[ : ] = np.copy( q[ 1: ] )
+    axis = axis/ np.sqrt( np.sum( axis**2 ) )
+
+    return theta, axis
+
+
+def rot2quat( R: np.ndarray ):
+    # [REF] https://danceswithcode.net/engineeringnotes/quaternions/quaternions.html
+    # [REF] From Johannes
+
+    assert len( R ) == 3 and len( R[ 0 ] ) == 3
+
+    q = np.zeros( 4 )
+
+    R00 = np.trace( R )
+    tmp = np.array( [ R00, R[ 0,0 ], R[ 1,1 ], R[ 2,2 ] ] )
+    k = np.argmax( tmp )
+
+    q[ k ] = 0.5 * np.sqrt( 1 + 2 * tmp[ k ] - R00 )
+
+    if k == 0:
+        q[ 1 ] = 0.25/q[ k ] * ( R[ 2, 1 ] - R[ 1, 2 ] )
+        q[ 2 ] = 0.25/q[ k ] * ( R[ 0, 2 ] - R[ 2, 0 ] )
+        q[ 3 ] = 0.25/q[ k ] * ( R[ 1, 0 ] - R[ 0, 1 ] )
+
+    elif k == 1:
+        q[ 0 ] = 0.25/q[ k ] * ( R[ 2, 1 ] - R[ 1, 2 ] )
+        q[ 2 ] = 0.25/q[ k ] * ( R[ 1, 0 ] + R[ 0, 1 ] )
+        q[ 3 ] = 0.25/q[ k ] * ( R[ 0, 2 ] + R[ 2, 0 ] )
+
+    elif k == 2:
+        q[ 0 ] = 0.25/q[ k ] * ( R[ 0, 2 ] - R[ 2, 0 ] )
+        q[ 2 ] = 0.25/q[ k ] * ( R[ 1, 0 ] + R[ 0, 1 ] )
+        q[ 3 ] = 0.25/q[ k ] * ( R[ 2, 1 ] + R[ 1, 2 ] )
+
+    elif k == 3:
+        q[ 0 ] = 0.25/q[ k ] * ( R[ 1, 0 ] - R[ 0, 1 ] )
+        q[ 1 ] = 0.25/q[ k ] * ( R[ 0, 2 ] + R[ 2, 0 ] )
+        q[ 2 ] = 0.25/q[ k ] * ( R[ 2, 1 ] + R[ 1, 2 ] )
+
+    if q[ 0 ] < 0 : q = -q
+
+    return q
+
+
+
+def quat2rot( quat: np.ndarray ):
+
+    # [REF] https://danceswithcode.net/engineeringnotes/quaternions/quaternions.html
+
+    assert len( quat ) == 4
+
+    q0, q1, q2 ,q3  = quat[:]    
+
+    R = np.zeros( ( 3, 3 ) )
+
+    R[ 0, 0 ] = q0 ** 2 + q1 ** 2 - q2 ** 2 - q3 ** 2
+    R[ 0, 1 ] = 2 * q1 * q2 - 2 * q0 * q3
+    R[ 0, 2 ] = 2 * q1 * q3 + 2 * q0 * q2
+
+    R[ 1, 0 ] = 2 * q1 * q2 + 2 * q0 * q3
+    R[ 1, 1 ] = q0 ** 2 - q1 ** 2 + q2 ** 2 - q3 ** 2
+    R[ 1, 2 ] = 2 * q2 * q3 - 2 * q0 * q1
+
+    R[ 2, 0 ] = 2 * q1 * q3 - 2 * q0 * q2
+    R[ 2, 1 ] = 2 * q2 * q3 + 2 * q0 * q1
+    R[ 2, 2 ] = q0 ** 2 - q1 ** 2 - q2 ** 2 + q3 ** 2
+
+    return 
+
 
 class Logger(object):
     def __init__(self, record_data = False):

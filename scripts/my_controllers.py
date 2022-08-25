@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 # Local Library, under moses/scripts
 from my_robot     import Baxter
 from my_constants import Constants as C
-from my_utils     import min_jerk_traj, pose_right2left, task_right2left, dict2arr, arr2dict, poses_delta, make_dir
+from my_utils     import min_jerk_traj, pose_right2left, dict2arr, quat2rot, rot2quat, quat2angx, skew_sym
 
 # Baxter Library
 import baxter_external_devices  
@@ -64,6 +64,19 @@ class PrintController:
                     
 
                     print( "=" * 100 )
+
+                elif typed_letter == "r":
+
+                    print( "=" * 100 )
+
+                    for limb_name in [ "right", "left" ]:
+                        pos = self.robot.get_end_effector_orientation( limb_name )
+                        print( pos )
+                    
+
+                    print( "=" * 100 )
+
+
 
 # ==== TODO ==== #
 # [2022.07.29] Need to change the code, although the functionality is not used often.
@@ -372,21 +385,19 @@ class JointImpedanceController( ImpedanceController ):
         
         
         
-class CartesianImpedanceController( ImpedanceController ):
+class CartesianImpedanceControllerPos( ImpedanceController ):
     
-    def __init__( self, robot, which_arm : str, name: str, which_type: str, is_save_data:bool = False ):
+    def __init__( self, robot, which_arm : str, name: str, is_save_data:bool = False ):
         
         super( ).__init__( robot, which_arm )
         self.type = "cartesian_impedance_controller"
         self.name = name + "_" + self.type
 
         # Check whether the input is position only or position and rotation 
-        assert which_type in [ "pos", "pos_and_rot"]
-        self.which_type = which_type
         
         # If position only        , set the size of the matrices as 3
         # If position and rotation, set the size of the matrices as 6
-        self.n = 3 if which_type == "pos" else 6
+        self.n = 3 
         
         # The number of submovements for the ZFT
         self.n_act = 0 
@@ -403,17 +414,13 @@ class CartesianImpedanceController( ImpedanceController ):
         self.xp0f = [ ] 
         self.D    = [ ]
         self.ti   = [ ]
-        
-        # [TODO] [Moses C. Nah] [2022.08.21]
-        # Adding the desired orentation part of the robot 
-        if self.which_type == "pos_and_rot":
-            NotImplementedError( )
+
         
         # Check whether we need to save the data or not
         self.is_save_data = is_save_data
         
         # The number samples for the data
-        self.Ns = 2 ** 11
+        self.Ns = 2 ** 15
         
 
     def set_linear_impedance( self, Kx:np.ndarray, Bx:np.ndarray ):
@@ -481,11 +488,7 @@ class CartesianImpedanceController( ImpedanceController ):
             self.xp0_arr  = np.zeros( ( 3, self.Ns ) )
             self.dxp0_arr = np.zeros( ( 3, self.Ns ) )
             
-            # The rotational (orientation) and its velocity of the robot
-            if self.which_type == "pos_and_rot":
-                self.xr_arr   = np.zeros( ( 4, self.Ns ) )
-                self.dxr_arr  = np.zeros( ( 3, self.Ns ) )
-            
+
             # The Jacobian of the robot 
             self.J_arr    = np.zeros( ( 6, 7, self.Ns ) )
 
@@ -532,13 +535,6 @@ class CartesianImpedanceController( ImpedanceController ):
         # Get the velocity of the linear part
         # Calculate the torque which should be inputed. 
         tau = Jp.T @ ( self.Kx @ ( xp0 - xp ) + self.Bx @ ( dxp0 - dxp ) )
-
-        # ============================================= #
-        # ====== CALCULATION OF THE ANGULAR PART ====== #
-        # ============================================= #
-        if self.which_type == "pos_and_rot":
-            NotImplementedError( )
-            # tau += ROTATION TYPE
         
         if self.is_save_data:
             self.t_arr[      self.idx_data ] = t
@@ -552,10 +548,7 @@ class CartesianImpedanceController( ImpedanceController ):
             self.dxp_arr[ :, self.idx_data ] = dxp
             self.xp0_arr[  :, self.idx_data ] = xp0
             self.dxp0_arr[ :, self.idx_data ] = dxp0
-            
-            if self.which_type == "pos_and_rot":
-                NotImplementedError( )
-            
+    
             # The Jacobian of the robot 
             self.J_arr[ :, :, self.idx_data ] = J 
             
@@ -584,19 +577,290 @@ class CartesianImpedanceController( ImpedanceController ):
                                         'tau': self.tau_arr[ :, :self.idx_data ],
                                          'Kx': self.Kx, 'Bx': self.Bx }  )
         
+class CartesianImpedanceControllerPosAndRotType1( ImpedanceController ):
+    
+    def __init__( self, robot, which_arm : str, name: str, is_save_data:bool = False ):
+        
+        super( ).__init__( robot, which_arm )
+        self.type = "cartesian_impedance_controller_pos_and_rot_type1"
+        self.name = name + "_" + self.type
+        
+        self.is_save_data = is_save_data
+        
+        # The number samples for the data
+        self.Ns = 2 ** 15
+        
+    def setup( self ):
+        # Before Setting, check whether the impedances are defined
+        assert self.Kx is not None and self.Bx is not None 
+        assert self.k  is not None and  self.b is not None 
+        
+        # Check whether the movement is defined 
+        assert self.n_act >= 1 
+
+        # The data array for saving the data 
+        if self.is_save_data:
+            self.t_arr   = np.zeros( self.Ns )
+            self.q_arr   = np.zeros( ( 7, self.Ns ) )
+            self.dq_arr  = np.zeros( ( 7, self.Ns ) )
+            
+            # The linear position and velocity of the robot
+            self.xp_arr   = np.zeros( ( 3, self.Ns ) )
+            self.dxp_arr  = np.zeros( ( 3, self.Ns ) )
+            
+            # The linear part of the zero-force trajectory
+            self.xp0_arr  = np.zeros( ( 3, self.Ns ) )
+            self.dxp0_arr = np.zeros( ( 3, self.Ns ) )
+            
+            # The current orientation
+
+            # The Jacobian of the robot 
+            self.J_arr    = np.zeros( ( 6, 7, self.Ns ) )
+
+            # The input torque of the robot            
+            self.tau_arr = np.zeros( ( 7, self.Ns ) )
+        
+            # The data pointer that we will use for saving the data 
+            self.idx_data = 0 
+
+        
+    
+    def set_linear_impedance( self, Kx:np.ndarray, Bx:np.ndarray ):
+    
+        # Resetting the Kq and Bq will be dangerous, hence asserting. 
+        assert self.Kx is None and self.Bx is None
+        
+        # Check whether the 2D stiffness and damping matrices are in good shape.
+        assert len( Kx ) == 3 and len( Kx[ 0 ] ) == 3
+        assert len( Bx ) == 3 and len( Bx[ 0 ] ) == 3
+
+        # Check whether both matrices are positive definite
+        assert np.all( np.linalg.eigvals( Kx ) > 0 )
+        assert np.all( np.linalg.eigvals( Bx ) > 0 )
+            
+        # If they have passed all the asserts, then saving it as an attribute
+        self.Kx = Kx
+        self.Bx = Bx
+        
+    def set_rotational_impedance( self, k:float, b: float ):
+    
+        # Resetting the Kq and Bq will be dangerous, hence asserting. 
+        assert self.k is None and self.b is None
+        
+        # Check whether the 2D stiffness and damping matrices are in good shape.
+        assert k > 0 and b > 0
+            
+        # If they have passed all the asserts, then saving it as an attribute
+        self.k = k
+        self.b = b
+    
+    def add_linear_movement( self, xp0i:np.ndarray, xp0f:np.ndarray, D:float, ti:float ):
+        
+        # Check whether the size of qi and qf are good
+        assert len( xp0i ) == 3
+        assert len( xp0f ) == 3
+
+        # Check whether the D and ti are positive and non-negative, respectively. 
+        assert D > 0 and ti >= 0 
+        
+        # If there is more than one movement, then initial position must be a zero array. 
+        if self.n_act >= 1: assert np.all( ( xp0i == 0 ) )
+        
+        self.xp0i.append( xp0i )
+        self.xp0f.append( xp0f )
+        self.D.append(  D  )
+        self.ti.append( ti )
+        
+        # Since we have added the new movement, add the number of movements 
+        self.n_act += 1            
+    
+    def add_desired_orientation( self, quat_des: np.ndarray):
+        
+        assert len( quat_des ) == 4
+        
+        self.quat_des = quat_des
+    
+    def calc_torque( self, t: float ):
+        q  = self.robot.get_arm_pose( self.which_arm )
+        dq = self.robot.get_arm_velocity( self.which_arm )
+        
+        # The linear velocity part of the movement
+        xp  = self.robot.get_end_effector_pos( self.which_arm )
+        dxp = self.robot.get_end_effector_linear_vel( self.which_arm )
+        
+        # Get the whole Jacobian of the movement
+        J = np.array( self.robot.kins[ self.which_arm ].jacobian( joint_values = q ) )
+        
+        # The positional and rotational jacobian of the end-effector
+        Jp = J[ :3, : ]
+        Jr = J[ 3:, : ]
+                
+        xp0  = np.zeros( 3 )
+        dxp0 = np.zeros( 3 ) 
+                
+        # ============================================= #
+        # ====== CALCULATION OF THE LINEAR PART ======= #
+        # ============================================= #
+        for i in range( self.n_act ): 
+            for j in range( 3 ): 
+                ZFT_pos, ZFT_vel = min_jerk_traj( t, self.ti[ i ], self.ti[ i ] + self.D[ i ], self.xp0i[ i ][ j ], self.xp0f[ i ][ j ], self.D[ i ] )
+                xp0[  j ] += ZFT_pos
+                dxp0[ j ] += ZFT_vel
+            
+        # Get the velocity of the linear part
+        # Calculate the torque which should be inputed. 
+        tau = Jp.T @ ( self.Kx @ ( xp0 - xp ) + self.Bx @ ( dxp0 - dxp ) )       
+    
+        # Adding the rotational part 
+        quat_cur  = self.robot.get_end_effector_orientation( self.which_arm )
+        w         = self.robot.get_end_effector_angular_vel( self.which_arm )
+        
+        R_cur = quat2rot( quat_cur )
+        R_des = quat2rot( self.quat_des )
+        Rdiff = R_cur.T @ R_des
+        
+        theta, axis_cur = quat2angx( rot2quat( Rdiff ) )
+        axis_0   = R_cur @ axis_cur 
+        
+        m = axis_0 * self.k * theta - self.b * w
+        
+        tau += Jr.T @ m
+        
+        return tau
+    
+    def publish_data( self, dir_name: str ):
+        pass
+    
+        
+class CartesianImpedanceControllerPosAndRotType2( ImpedanceController ):
+    
+
+    def __init__( self, robot, which_arm : str, name: str, is_save_data:bool = False ):
+        
+        super( ).__init__( robot, which_arm )
+        self.type = "cartesian_impedance_controller_pos_and_rot_type2"
+        self.name = name + "_" + self.type
+        
+        self.is_save_data = is_save_data
+        
+        # The number samples for the data
+        self.Ns = 2 ** 15
+        
+    def setup( self ):
+        pass
+        
+    
+    def set_linear_impedance( self, Kx:np.ndarray, Bx:np.ndarray ):
+    
+        # Resetting the Kq and Bq will be dangerous, hence asserting. 
+        assert self.Kx is None and self.Bx is None
+        
+        # Check whether the 2D stiffness and damping matrices are in good shape.
+        assert len( Kx ) == 3 and len( Kx[ 0 ] ) == 3
+        assert len( Bx ) == 3 and len( Bx[ 0 ] ) == 3
+
+        # Check whether both matrices are positive definite
+        assert np.all( np.linalg.eigvals( Kx ) > 0 )
+        assert np.all( np.linalg.eigvals( Bx ) > 0 )
+            
+        # If they have passed all the asserts, then saving it as an attribute
+        self.Kx = Kx
+        self.Bx = Bx
+        
+    def set_rotational_impedance( self, Kr:float, Br: float ):
+    
+        # Resetting the Kq and Bq will be dangerous, hence asserting. 
+        # Resetting the Kq and Bq will be dangerous, hence asserting. 
+        assert self.Kr is None and self.Br is None
+        
+        # Check whether the 2D stiffness and damping matrices are in good shape.
+        assert len( Kr ) == 3 and len( Kr[ 0 ] ) == 3
+        assert len( Br ) == 3 and len( Br[ 0 ] ) == 3
+        
+        # If they have passed all the asserts, then saving it as an attribute
+        self.Kr = Kr
+        self.Br = Br
+    
+    def add_linear_movement( self, xp0i:np.ndarray, xp0f:np.ndarray, D:float, ti:float ):
+        
+        # Check whether the size of qi and qf are good
+        assert len( xp0i ) == 3
+        assert len( xp0f ) == 3
+
+        # Check whether the D and ti are positive and non-negative, respectively. 
+        assert D > 0 and ti >= 0 
+        
+        # If there is more than one movement, then initial position must be a zero array. 
+        if self.n_act >= 1: assert np.all( ( xp0i == 0 ) )
+        
+        self.xp0i.append( xp0i )
+        self.xp0f.append( xp0f )
+        self.D.append(  D  )
+        self.ti.append( ti )
+        
+        # Since we have added the new movement, add the number of movements 
+        self.n_act += 1            
+    
+    def add_desired_orientation( self, Rdes: np.ndarray):
+        
+        # Up to this point, we only set a single orientation
+        self.Rdes = Rdes 
+    
+    def add_desired_orientation( self, quat_des: np.ndarray):
+        
+        assert len( quat_des ) == 4
+        
+        self.quat_des = quat_des
+    
+    def calc_torque( self, t: float ):
+        q  = self.robot.get_arm_pose( self.which_arm )
+        dq = self.robot.get_arm_velocity( self.which_arm )
+        
+        # The linear velocity part of the movement
+        xp  = self.robot.get_end_effector_pos( self.which_arm )
+        dxp = self.robot.get_end_effector_linear_vel( self.which_arm )
+        
+        # Get the whole Jacobian of the movement
+        J = np.array( self.robot.kins[ self.which_arm ].jacobian( joint_values = q ) )
+        
+        # The positional and rotational jacobian of the end-effector
+        Jp = J[ :3, : ]
+        Jr = J[ 3:, : ]
+                
+        xp0  = np.zeros( 3 )
+        dxp0 = np.zeros( 3 ) 
+                
+        # ============================================= #
+        # ====== CALCULATION OF THE LINEAR PART ======= #
+        # ============================================= #
+        for i in range( self.n_act ): 
+            for j in range( 3 ): 
+                ZFT_pos, ZFT_vel = min_jerk_traj( t, self.ti[ i ], self.ti[ i ] + self.D[ i ], self.xp0i[ i ][ j ], self.xp0f[ i ][ j ], self.D[ i ] )
+                xp0[  j ] += ZFT_pos
+                dxp0[ j ] += ZFT_vel
+            
+        # Get the velocity of the linear part
+        # Calculate the torque which should be inputed. 
+        tau = Jp.T @ ( self.Kx @ ( xp0 - xp ) + self.Bx @ ( dxp0 - dxp ) )       
+    
+        # Adding the rotational part 
+        # FILL-in
+        
+        return tau
+    
+    def publish_data( self, dir_name: str ):
+        pass
+        
 # Mainly for Debugging the Robot Controller
 if __name__ == "__main__":
     
     parser  = argparse.ArgumentParser( formatter_class = argparse.RawTextHelpFormatter )
-    parser.add_argument('-c', '--controller'       , dest = 'ctrl_type'           , action = 'store'      , type =  str, help = C.CONTROLLER_DESCRIPTIONS                         )
+    parser.add_argument('-c', '--controller' , dest = 'ctrl_type', action = 'store', type =  str, help = C.CONTROLLER_DESCRIPTIONS)
     
     args = parser.parse_args( rospy.myargv( )[ 1: ] )
 
     # Initializing the Baxter Robot
     my_baxter = Baxter( None )
-    
-    # Flag for saving data
-    is_save_data = False
     
     # for imp in imp_arr: imp.setup( )
     
@@ -613,101 +877,13 @@ if __name__ == "__main__":
         my_ctrl.add_movement( which_arm =  "left", pose2go = pose_right2left( C.GRASP_POSE_UP ), joint_vel = 0.5, toff = 3 )
         my_ctrl.run( )
         
+        my_ctrl = PrintController( my_baxter )
+        my_ctrl.run( )
+        
         
     elif args.ctrl_type == "imp_controller":     
         # Move the robot to the Specific Joint Posture
-        my_ctrl = JointPositionController( my_baxter )
-        my_ctrl.add_movement( which_arm = "right", pose2go = C.GRASP_POSE_UP                , joint_vel = 0.3, toff = 3 )    
-        my_ctrl.add_movement( which_arm = "left" , pose2go = pose_right2left( C.GRASP_POSE ), joint_vel = 0.3, toff = 3 )    
-        my_ctrl.run( )
-        
-        # Close the gripper
-        # my_baxter.close_gripper( )
-        
-        # Define the impedance controller
-        Kq_mat = np.diag( [ 15.0, 15.0, 8.0, 10.0, 3.0, 10.0, 1.5 ]  )
-        Bq_mat = 0.2 * Kq_mat
-
-        # First RIGHT Impedance
-        impR_1 = JointImpedanceController( my_baxter, which_arm = "right", name = "right_imp1", is_save_data = False )
-        impR_1.set_impedance( Kq = Kq_mat, Bq = Bq_mat )
-                                        
-        # Add the movements                               
-        qi = dict2arr( which_arm = "right", my_dict = my_baxter.get_arm_pose( which_arm = "right" ) )
-        qf = dict2arr( which_arm = "right", my_dict = C.GRASP_POSE_UP )
-        D1 = 3.0
-        impR_1.add_movement( qi = qi, qf = qf, D = D1, ti = 0. )
-
-        # First LEFT Impedance
-        impL_1 = JointImpedanceController( my_baxter, which_arm = "left", name = "left_imp1", is_save_data = False )
-        impL_1.set_impedance( Kq = Kq_mat, Bq = Bq_mat )
-                                        
-        # Add the movements                               
-        qi = dict2arr( which_arm = "left", my_dict = my_baxter.get_arm_pose( which_arm = "left" ) )
-        qf = dict2arr( which_arm = "left", my_dict = pose_right2left( C.GRASP_POSE ) )
-        D1 = 2.0
-        impL_1.add_movement( qi = qi, qf = qf, D = D1, ti = 0. )
-        
-        # Add the task-space impedances for both 
-        Kx_mat = np.diag( [ 250.0, 250.0, 250.0 ]  )
-        Bx_mat = np.diag( [  10.0,  10.0,  10.0 ]  )
-        
-        impR_2 = CartesianImpedanceController( my_baxter, which_arm = "right", name = "right_imp2", which_type = "pos", is_save_data = True )
-        impR_2.set_linear_impedance( Kx = Kx_mat, Bx = Bx_mat )
-                                        
-        # Add the movements                               
-        impR_2.add_linear_movement( xp0i = C.GRASP_POSE_UP_EE_POS_INIT, xp0f = C.GRASP_POSE_UP_EE_POS_FINAL , D = 3.0, ti = 0.0 )
-        impR_2.add_linear_movement( xp0i = np.zeros( 3 )              , xp0f = np.array( [ 0, 0, 0.3 ] )    , D = 3.0, ti = 4.5 )
-
-        # The 2nd Impedance
-        # impL_2 = CartesianImpedanceController( my_baxter, which_arm = "left", name = "left_imp2", which_type = "pos" )
-        # impL_2.set_impedance( Kx = Kx_mat, Bx = Bx_mat )
-                                        
-        # # Add the movements                               
-        # impL_2.add_movement( xi = task_right2left( C.GRASP_POSE_UP_EE_POS_INIT ), xf = task_right2left( C.GRASP_POSE_UP_EE_POS_FINAL ), D = 3.0, ti = 0. )
-
-        # Saving these impedances as an array to iterate over 
-        imp_arr  = [ impR_1, impL_1, impR_2 ]
-        
-        for imp in imp_arr: imp.setup( )
-                        
-        input( "Ready for Initiating the movements? press any key to continue" )
-
-        ts = rospy.Time.now( )
-        t  = 0
-
-        # Running the main loop
-        while not rospy.is_shutdown( ) and t <= 9:
-
-            tau = { "right": np.zeros( 7 ), "left": np.zeros( 7 ) }
-            
-            # Iterating over the impedances 
-            for imp in imp_arr:
-                
-                # Calculate the Torque of the arm 
-                tmp_tau = imp.calc_torque( t )
-                
-                tau[ imp.which_arm ] += tmp_tau 
-
-            for limb_name in [ "right", "left" ]:
-                my_baxter.arms[ limb_name ].set_joint_torques( arr2dict( limb_name, arr = tau[ limb_name ]  )  )
-                
-            # if is_publish_data:        
-            my_baxter.control_rate.sleep( )
-            
-            t = ( rospy.Time.now( ) - ts ).to_sec( )
-            
-            
-        # After finishing the movement, publishing the data 
-        # The number of impedances should match the message
-        # Each Impedance Must have an independent Message
-        # Check whether you will publish the data or not.
-
-        dir_name = make_dir( )
-
-        for imp in imp_arr:
-            if imp.is_save_data: imp.publish_data( dir_name = dir_name )
-            
+        pass
 
     else:
         
