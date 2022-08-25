@@ -38,7 +38,7 @@ def main():
     
 
     my_ctrl = JointPositionController( my_baxter )
-    my_ctrl.add_movement( which_arm = "right", pose2go = C.GRASP_POSE_UP                , joint_vel = 0.3, toff = 3 )    
+    my_ctrl.add_movement( which_arm = "right", pose2go = C.GRASP_POSE_UP                   , joint_vel = 0.3, toff = 3 )    
     my_ctrl.add_movement( which_arm = "left" , pose2go = pose_right2left( C.GRASP_POSE_UP ), joint_vel = 0.3, toff = 3 )    
     my_ctrl.run( )
     
