@@ -1,5 +1,6 @@
 #!/usr/bin/python3
 import rospy
+import numpy as np
 
 # BAXTER Libraries
 import baxter_interface
@@ -81,20 +82,62 @@ class Baxter( object ):
         return self.arms[ which_arm  ].joint_velocities( )
 
     def get_end_effector_pos( self, which_arm: str ):
+        
         assert which_arm in [ "right", "left" ]
-        return self.arms[ which_arm ].endpoint_pose( )[ "position" ]
+        
+        # Return a 3D vector ordered x,y,z
+        pos = np.zeros( 3, dtype = np.float32 )
+        pose_baxter = self.arms[ which_arm ].endpoint_pose( )[ "position" ]
+        
+        pos[ 0 ] = pose_baxter.x 
+        pos[ 1 ] = pose_baxter.y 
+        pos[ 2 ] = pose_baxter.z 
+        
+        return pos
 
     def get_end_effector_linear_vel( self, which_arm: str ):
+        
         assert which_arm in [ "right", "left" ]
-        return self.arms[ which_arm ].endpoint_velocity( )[ "linear" ]
+        
+        # Return a 3D vector ordered x,y,z
+        vel = np.zeros( 3, dtype = np.float32 )
+        vel_baxter = self.arms[ which_arm ].endpoint_velocity( )[ "linear" ]
+        
+        vel[ 0 ] = vel_baxter.x 
+        vel[ 1 ] = vel_baxter.y 
+        vel[ 2 ] = vel_baxter.z 
+
+        return vel
+        
     
     def get_end_effector_angular_vel( self, which_arm: str ):
+        
         assert which_arm in [ "right", "left" ]
-        return self.arms[ which_arm ].endpoint_velocity( )[ "angular" ]
+        
+        # Return a 3D vector ordered x,y,z
+        w = np.zeros( 3, dtype = np.float32 )
+        w_baxter = self.arms[ which_arm ].endpoint_velocity( )[ "angular" ]
+
+        w[ 0 ] = w_baxter.x 
+        w[ 1 ] = w_baxter.y 
+        w[ 2 ] = w_baxter.z 
+
+        return w
 
     def get_end_effector_orientation( self, which_arm: str ):
+        
         assert which_arm in [ "right", "left" ]
-        return self.arms[ which_arm ].endpoint_pose( )[ "orientation" ]
+        
+        # Return a 3D vector ordered x,y,z
+        quat = np.zeros( 4, dtype = np.float32 )
+        quat_baxter = self.arms[ which_arm ].endpoint_pose( )[ "orientation" ]
+
+        quat[ 0 ] = quat_baxter.w
+        quat[ 1 ] = quat_baxter.x 
+        quat[ 2 ] = quat_baxter.y 
+        quat[ 3 ] = quat_baxter.z 
+
+        return quat
 
     def get_gripper_pos( self, which_arm: str ) :
         assert which_arm in [ "right", "left" ]
@@ -110,8 +153,10 @@ class Baxter( object ):
      
 
 
-# For Debugging
+# For Debugging``
 if __name__ == "__main__":
      
     my_baxter = Baxter( None )
+    
+    print( my_baxter.get_end_effector_orientation( which_arm = "right" ) ) 
 
