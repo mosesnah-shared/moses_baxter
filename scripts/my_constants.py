@@ -96,12 +96,13 @@ The available options for CTRL_TYPE are as follows:
                         'right_w1' : -1.3341797903,
                         'right_w2' : -1.7096215881 }
     
-    # RIGHT HAND SIDE!!
-    GRASP_POSE_UP_EE_POS_INIT  = [ 1.000504782875165, -0.35706929111501046, 0.05624118812380531 ]
-    GRASP_POSE_UP_EE_POS_FINAL = [ 1.000504782875165, -0.65706929111501046, 0.05624118812380531 ]
-
-    GRASP_POSE_UP_EE_POS_UPPER = [ 1.000504782875165, -0.65706929111501046, 0.35 ]
-
+    GRASP_TMP = { 'right_s0' : 0.1852281801,
+                  'right_s1': -0.2634612003,                 
+                  'right_e0': 0.1629854587,                  
+                  'right_e1': 1.1811652067,                  
+                  'right_w0': -0.1265534150,
+                  'right_w1': -1.0783884939,
+                  'right_w2': -1.7042526553, }
 
     MID_POSE = {    'right_s0' : 0.7869321442,
                     'right_s1' : -0.5419854693,

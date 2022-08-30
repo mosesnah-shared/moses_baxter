@@ -8,7 +8,7 @@ import numpy             as np
 # Local Library, under moses/scripts
 from my_robot     import Baxter
 from my_constants import Constants as C
-from my_utils     import min_jerk_traj, pose_right2left, dict2arr, quat2rot, rot2quat, quat2angx
+from my_utils     import min_jerk_traj, pose_right2left, dict2arr, quat2rot, rot2quat, quat2angx,skew_sym
 
 # Baxter Library
 import baxter_external_devices  
@@ -554,29 +554,35 @@ class CartesianImpedanceControllerPosition( ImpedanceController ):
                                         'tau': self.tau_arr[ :, :self.idx_data ],
                                          'Kx': self.Kx, 'Bx': self.Bx }  )
         
-class CartesianImpedanceControllerPosAndRotType1( ImpedanceController ):
+class CartesianImpedanceControllerRotationType1( ImpedanceController ):
     
     def __init__( self, robot, which_arm : str, name: str, is_save_data:bool = False ):
         
-        super( ).__init__( robot, which_arm )
-        self.type = "cartesian_impedance_controller_pos_and_rot_type1"
+        super( ).__init__( robot, which_arm, is_save_data )
+        self.type = "cartesian_impedance_controller_rotation_type1"
         self.name = name + "_" + self.type
         
-        self.is_save_data = is_save_data
+        # Controller Parameters of the Controller 
+        # The rotational impedance, for this case we are only taking account for 1 impedance
+        self.k = None
+        self.b = None
         
-        # The number samples for the data
-        self.Ns = 2 ** 15
+        # The desired Quaternion
+        self.quat_des = None
+        
         
     def setup( self ):
+        
         # Before Setting, check whether the impedances are defined
-        assert self.Kx is not None and self.Bx is not None 
         assert self.k  is not None and  self.b is not None 
         
         # Check whether the movement is defined 
-        assert self.n_act >= 1 
+        assert self.quat_des is not None 
 
         # The data array for saving the data 
         if self.is_save_data:
+            
+            # The data array for saving the data 
             self.t_arr   = np.zeros( self.Ns )
             self.q_arr   = np.zeros( ( 7, self.Ns ) )
             self.dq_arr  = np.zeros( ( 7, self.Ns ) )
@@ -584,46 +590,24 @@ class CartesianImpedanceControllerPosAndRotType1( ImpedanceController ):
             # The linear position and velocity of the robot
             self.xp_arr   = np.zeros( ( 3, self.Ns ) )
             self.dxp_arr  = np.zeros( ( 3, self.Ns ) )
-            
-            # The linear part of the zero-force trajectory
-            self.xp0_arr  = np.zeros( ( 3, self.Ns ) )
-            self.dxp0_arr = np.zeros( ( 3, self.Ns ) )
-            
-            # The current orientation
-
+                        
             # The Jacobian of the robot 
-            self.J_arr    = np.zeros( ( 6, 7, self.Ns ) )
+            self.Jr_arr    = np.zeros( ( 3, 7, self.Ns ) )
 
             # The input torque of the robot            
             self.tau_arr = np.zeros( ( 7, self.Ns ) )
+            
+            # Set the angular displacement
+            self.theta_arr = np.zeros( ( 1, self.Ns ) )
+        
+            # The quaternion of the end-effector
+            self.quat_arr = np.zeros( ( 4, self.Ns ) )
         
             # The data pointer that we will use for saving the data 
             self.idx_data = 0 
-
-        
-    
-    def set_linear_impedance( self, Kx:np.ndarray, Bx:np.ndarray ):
-    
-        # Resetting the Kq and Bq will be dangerous, hence asserting. 
-        assert self.Kx is None and self.Bx is None
-        
-        # Check whether the 2D stiffness and damping matrices are in good shape.
-        assert len( Kx ) == 3 and len( Kx[ 0 ] ) == 3
-        assert len( Bx ) == 3 and len( Bx[ 0 ] ) == 3
-
-        # Check whether both matrices are positive definite
-        assert np.all( np.linalg.eigvals( Kx ) > 0 )
-        assert np.all( np.linalg.eigvals( Bx ) > 0 )
-            
-        # If they have passed all the asserts, then saving it as an attribute
-        self.Kx = Kx
-        self.Bx = Bx
-        
+                
     def set_rotational_impedance( self, k:float, b: float ):
     
-        # Resetting the Kq and Bq will be dangerous, hence asserting. 
-        assert self.k is None and self.b is None
-        
         # Check whether the 2D stiffness and damping matrices are in good shape.
         assert k > 0 and b > 0
             
@@ -631,27 +615,7 @@ class CartesianImpedanceControllerPosAndRotType1( ImpedanceController ):
         self.k = k
         self.b = b
     
-    def add_linear_movement( self, xp0i:np.ndarray, xp0f:np.ndarray, D:float, ti:float ):
-        
-        # Check whether the size of qi and qf are good
-        assert len( xp0i ) == 3
-        assert len( xp0f ) == 3
-
-        # Check whether the D and ti are positive and non-negative, respectively. 
-        assert D > 0 and ti >= 0 
-        
-        # If there is more than one movement, then initial position must be a zero array. 
-        if self.n_act >= 1: assert np.all( ( xp0i == 0 ) )
-        
-        self.xp0i.append( xp0i )
-        self.xp0f.append( xp0f )
-        self.D.append(  D  )
-        self.ti.append( ti )
-        
-        # Since we have added the new movement, add the number of movements 
-        self.n_act += 1            
-    
-    def add_desired_orientation( self, quat_des: np.ndarray):
+    def set_desired_orientation( self, quat_des: np.ndarray ):
         
         assert len( quat_des ) == 4
         
@@ -659,8 +623,8 @@ class CartesianImpedanceControllerPosAndRotType1( ImpedanceController ):
     
     def calc_torque( self, t: float ):
         
+        # Get the current joint position 
         q  = self.robot.get_arm_pose( self.which_arm )
-        dq = self.robot.get_arm_velocity( self.which_arm )
         
         # The linear velocity part of the movement
         xp  = self.robot.get_end_effector_pos( self.which_arm )
@@ -669,30 +633,14 @@ class CartesianImpedanceControllerPosAndRotType1( ImpedanceController ):
         # Get the whole Jacobian of the movement
         J = np.array( self.robot.kins[ self.which_arm ].jacobian( joint_values = q ) )
         
-        # The positional and rotational jacobian of the end-effector
-        Jp = J[ :3, : ]
+        # The rotational jacobian of the end-effector
         Jr = J[ 3:, : ]
-                
-        xp0  = np.zeros( 3 )
-        dxp0 = np.zeros( 3 ) 
-                
-        # ============================================= #
-        # ====== CALCULATION OF THE LINEAR PART ======= #
-        # ============================================= #
-        for i in range( self.n_act ): 
-            for j in range( 3 ): 
-                ZFT_pos, ZFT_vel = min_jerk_traj( t, self.ti[ i ], self.ti[ i ] + self.D[ i ], self.xp0i[ i ][ j ], self.xp0f[ i ][ j ], self.D[ i ] )
-                xp0[  j ] += ZFT_pos
-                dxp0[ j ] += ZFT_vel
-            
-        # Get the velocity of the linear part
-        # Calculate the torque which should be inputed. 
-        tau = Jp.T @ ( self.Kx @ ( xp0 - xp ) + self.Bx @ ( dxp0 - dxp ) )       
-    
-        # Adding the rotational part 
+
+        # Get the current quaternion and angular velocity 
         quat_cur  = self.robot.get_end_effector_orientation( self.which_arm )
         w         = self.robot.get_end_effector_angular_vel( self.which_arm )
         
+        # Quat to rotation matrix
         R_cur = quat2rot( quat_cur )
         R_des = quat2rot( self.quat_des )
         Rdiff = R_cur.T @ R_des
@@ -702,49 +650,93 @@ class CartesianImpedanceControllerPosAndRotType1( ImpedanceController ):
         
         m = axis_0 * self.k * theta - self.b * w
         
-        tau += Jr.T @ m
+        tau = Jr.T @ m
+            
+        if self.is_save_data:
+            self.t_arr[      self.idx_data ] = t
+            self.tau_arr[ :, self.idx_data ] = tau
+
+            # The linear position and velocity of the robot
+            self.xp_arr[  :, self.idx_data ] = xp
+            self.dxp_arr[ :, self.idx_data ] = dxp
+            
+            # The theta 
+            self.theta_arr[ :, self.idx_data ] = theta            
+            self.Jr_arr[ :, self.idx_data ] = Jr
+            
+            
+            # The orientation of the end-effector
+            self.quat_arr[ :, self.idx_data ] = quat_cur
+            
+            self.idx_data += 1
         
         return tau
     
     def publish_data( self, dir_name: str ):
-        pass
+        # Printing out all the details of the simulation as a file that is great for MATLAB compatability
+        file_name = dir_name + "/" + self.name + ".mat"
+        
+        # [TODO] There will be a single liner to do this, including this in the parent class
+        scipy.io.savemat( file_name, { 'name': self.name,                    
+                                       'time': self.t_arr[      :self.idx_data ], 
+                                          'q': self.q_arr[   :, :self.idx_data ], 
+                                         'dq': self.dq_arr[   :, :self.idx_data ], 
+                                        'xp': self.xp_arr[   :, :self.idx_data ], 
+                                        'dxp': self.dxp_arr[   :, :self.idx_data ],        
+                                        'Jr': self.Jr_arr[ :, :, :self.idx_data ],
+                                        'tau': self.tau_arr[ :, :self.idx_data ],
+                                        'quat': self.quat_arr[ :, :self.idx_data ], 
+                                       'theta': self.theta_arr[ :, :self.idx_data ],
+                                         'k': self.k, 'b': self.b, 'quat_des': self.quat_des }  )
     
         
-class CartesianImpedanceControllerPosAndRotType2( ImpedanceController ):
+class CartesianImpedanceControllerRotationType2( ImpedanceController ):
     
 
     def __init__( self, robot, which_arm : str, name: str, is_save_data:bool = False ):
         
-        super( ).__init__( robot, which_arm )
-        self.type = "cartesian_impedance_controller_pos_and_rot_type2"
+        super( ).__init__( robot, which_arm, is_save_data )
+        self.type = "cartesian_impedance_controller_rotation_type2"
         self.name = name + "_" + self.type
         
-        self.is_save_data = is_save_data
+        # Controller Parameters of the Controller 
+        # The rotational impedance, for this case we are only taking account for 1 impedance
+        self.Kr = None
+        self.Br = None
+        
+        # The desired Quaternion
+        self.quat_des = None
         
         # The number samples for the data
         self.Ns = 2 ** 15
         
     def setup( self ):
-        pass
         
-    
-    def set_linear_impedance( self, Kx:np.ndarray, Bx:np.ndarray ):
-    
-        # Resetting the Kq and Bq will be dangerous, hence asserting. 
-        assert self.Kx is None and self.Bx is None
+        # Before Setting, check whether the impedances are defined
+        assert self.Kr  is not None and  self.Br is not None 
         
-        # Check whether the 2D stiffness and damping matrices are in good shape.
-        assert len( Kx ) == 3 and len( Kx[ 0 ] ) == 3
-        assert len( Bx ) == 3 and len( Bx[ 0 ] ) == 3
+        # Check whether the movement is defined 
+        assert self.quat_des is not None 
 
-        # Check whether both matrices are positive definite
-        assert np.all( np.linalg.eigvals( Kx ) > 0 )
-        assert np.all( np.linalg.eigvals( Bx ) > 0 )
+        # The data array for saving the data 
+        if self.is_save_data:
             
-        # If they have passed all the asserts, then saving it as an attribute
-        self.Kx = Kx
-        self.Bx = Bx
+            # The data array for saving the data 
+            self.t_arr   = np.zeros( self.Ns )
+            
+            # The linear position and velocity of the robot
+            self.xp_arr   = np.zeros( ( 3, self.Ns ) )
+            self.dxp_arr  = np.zeros( ( 3, self.Ns ) )
+
+            # The input torque of the robot            
+            self.tau_arr = np.zeros( ( 7, self.Ns ) )            
         
+            # The quaternion of the end-effector
+            self.quat_arr = np.zeros( ( 4, self.Ns ) )
+        
+            # The data pointer that we will use for saving the data 
+            self.idx_data = 0 
+    
     def set_rotational_impedance( self, Kr:float, Br: float ):
     
         # Resetting the Kq and Bq will be dangerous, hence asserting. 
@@ -759,41 +751,17 @@ class CartesianImpedanceControllerPosAndRotType2( ImpedanceController ):
         self.Kr = Kr
         self.Br = Br
     
-    def add_linear_movement( self, xp0i:np.ndarray, xp0f:np.ndarray, D:float, ti:float ):
         
-        # Check whether the size of qi and qf are good
-        assert len( xp0i ) == 3
-        assert len( xp0f ) == 3
-
-        # Check whether the D and ti are positive and non-negative, respectively. 
-        assert D > 0 and ti >= 0 
-        
-        # If there is more than one movement, then initial position must be a zero array. 
-        if self.n_act >= 1: assert np.all( ( xp0i == 0 ) )
-        
-        self.xp0i.append( xp0i )
-        self.xp0f.append( xp0f )
-        self.D.append(  D  )
-        self.ti.append( ti )
-        
-        # Since we have added the new movement, add the number of movements 
-        self.n_act += 1            
-    
-    def add_desired_orientation( self, Rdes: np.ndarray):
-        
-        # Up to this point, we only set a single orientation
-        self.Rdes = Rdes 
-    
-    def add_desired_orientation( self, quat_des: np.ndarray):
+    def set_desired_orientation( self, quat_des: np.ndarray ):
         
         assert len( quat_des ) == 4
         
         self.quat_des = quat_des
     
     def calc_torque( self, t: float ):
-        q  = self.robot.get_arm_pose( self.which_arm )
-        dq = self.robot.get_arm_velocity( self.which_arm )
         
+        q  = self.robot.get_arm_pose( self.which_arm )
+    
         # The linear velocity part of the movement
         xp  = self.robot.get_end_effector_pos( self.which_arm )
         dxp = self.robot.get_end_effector_linear_vel( self.which_arm )
@@ -802,33 +770,51 @@ class CartesianImpedanceControllerPosAndRotType2( ImpedanceController ):
         J = np.array( self.robot.kins[ self.which_arm ].jacobian( joint_values = q ) )
         
         # The positional and rotational jacobian of the end-effector
-        Jp = J[ :3, : ]
         Jr = J[ 3:, : ]
                 
-        xp0  = np.zeros( 3 )
-        dxp0 = np.zeros( 3 ) 
-                
-        # ============================================= #
-        # ====== CALCULATION OF THE LINEAR PART ======= #
-        # ============================================= #
-        for i in range( self.n_act ): 
-            for j in range( 3 ): 
-                ZFT_pos, ZFT_vel = min_jerk_traj( t, self.ti[ i ], self.ti[ i ] + self.D[ i ], self.xp0i[ i ][ j ], self.xp0f[ i ][ j ], self.D[ i ] )
-                xp0[  j ] += ZFT_pos
-                dxp0[ j ] += ZFT_vel
-            
-        # Get the velocity of the linear part
-        # Calculate the torque which should be inputed. 
-        tau = Jp.T @ ( self.Kx @ ( xp0 - xp ) + self.Bx @ ( dxp0 - dxp ) )       
+        # Get the current quaternion and angular velocity 
+        quat_cur  = self.robot.get_end_effector_orientation( self.which_arm )
+        w         = self.robot.get_end_effector_angular_vel( self.which_arm )
     
-        # Adding the rotational part 
-        # FILL-in
+        # Quat to rotation matrix
+        R_cur = quat2rot( quat_cur )
+        R_des = quat2rot( self.quat_des )
+        Rdiff = R_des.T @ R_cur
         
+        q0, q1, q2, q3 = rot2quat( Rdiff ) 
+        eta_des = np.array( [ q1, q2, q3 ] )
+        E = q0 * np.eye( 3 ) - skew_sym( eta_des )
+        
+        tau = -Jr.T @ ( R_des @ E.T @ self.Kr @ eta_des + self.Br @ w )
+
+        if self.is_save_data:
+            self.t_arr[      self.idx_data ] = t
+            self.tau_arr[ :, self.idx_data ] = tau
+
+            # The linear position and velocity of the robot
+            self.xp_arr[  :, self.idx_data ] = xp
+            self.dxp_arr[ :, self.idx_data ] = dxp
+                    
+            # The orientation of the end-effector
+            self.quat_arr[ :, self.idx_data ] = quat_cur
+                
+            self.idx_data += 1
+
         return tau
     
     def publish_data( self, dir_name: str ):
-        pass
+        # Printing out all the details of the simulation as a file that is great for MATLAB compatability
+        file_name = dir_name + "/" + self.name + ".mat"
         
+        # [TODO] There will be a single liner to do this, including this in the parent class
+        scipy.io.savemat( file_name, { 'name': self.name,                    
+                                       'time': self.t_arr[      :self.idx_data ], 
+                                        'xp': self.xp_arr[   :, :self.idx_data ], 
+                                        'dxp': self.dxp_arr[   :, :self.idx_data ],        
+                                        'tau': self.tau_arr[ :, :self.idx_data ],
+                                        'quat': self.quat_arr[ :, :self.idx_data ], 
+                                         'Kr': self.Kr, 'Br': self.Br, 'quat_des': self.quat_des }  )
+    
 # Mainly for Debugging the Robot Controller
 if __name__ == "__main__":
     
