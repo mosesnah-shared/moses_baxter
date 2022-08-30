@@ -252,7 +252,7 @@ def quat2angx( q ):
 
     assert q[ 0 ] <= 1
     theta = 2 * np.arccos( q[ 0 ] )
-    axis = q[ 1: ]
+    axis = np.copy( q[ 1: ] )
     
     # If the axis values are super small, then 
     tmp = np.sum( axis**2 )

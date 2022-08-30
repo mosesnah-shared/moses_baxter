@@ -19,7 +19,7 @@ import matplotlib.pyplot as plt
 from my_robot        import Baxter
 from my_constants    import Constants as C
 from my_utils        import pose_right2left, dict2arr, arr2dict, make_dir, quat2rot, skew_sym, quat2angx, rot2quat, poses_delta
-from my_controllers  import JointPositionController, JointImpedanceController, CartesianImpedanceControllerRotationType1
+from my_controllers  import JointPositionController, JointImpedanceController, CartesianImpedanceControllerRotationType2
 
 
 np.set_printoptions( linewidth = 4000, precision = 8)
@@ -80,20 +80,20 @@ def main():
 
      
     # The 2nd impedance for matching the orientation
-    impR_2 = CartesianImpedanceControllerRotationType1( my_baxter, which_arm = "right", name = "right_imp2", is_save_data = args.is_save_data )
-    impR_2.set_rotational_impedance( k = 20.0, b = 1.0 )
+    impR_2 = CartesianImpedanceControllerRotationType2( my_baxter, which_arm = "right", name = "right_imp2", is_save_data = args.is_save_data )
+    impR_2.set_rotational_impedance( Kr = 20 * np.eye( 3 ), Br = 2 * np.eye( 3 ) )
     right_orient = my_baxter.get_end_effector_orientation( which_arm = "right" )
     impR_2.set_desired_orientation( right_orient )
     
     # The 2nd impedance for matching the orientation
-    impL_2 = CartesianImpedanceControllerRotationType1( my_baxter, which_arm = "left", name = "left_imp2", is_save_data = args.is_save_data )
-    impL_2.set_rotational_impedance( k = 30.0, b = 1.0 )
+    impL_2 = CartesianImpedanceControllerRotationType2( my_baxter, which_arm = "left", name = "left_imp2", is_save_data = args.is_save_data )
+    impL_2.set_rotational_impedance( Kr = 0 * np.eye( 3 ), Br = 0 * np.eye( 3 ) )
     left_orient = my_baxter.get_end_effector_orientation( which_arm = "left" )
     impL_2.set_desired_orientation( left_orient )    
     
     
     # Saving these impedances as an array to iterate over 
-    imp_arr  = [ impR_1 , impL_1,  impR_2, impL_2 ]
+    imp_arr  = [ impR_1 , impL_1 ,impR_2 , impL_2 ]
     
     for imp in imp_arr: imp.setup( )
                     
@@ -103,7 +103,7 @@ def main():
     t  = 0
 
     # Running the main loop
-    while not rospy.is_shutdown( ) and t <=  20:
+    while not rospy.is_shutdown( ) and t <= 22:
 
         tau = { "right": np.zeros( 7 ), "left": np.zeros( 7 ) }
         
