@@ -518,14 +518,14 @@ class CartesianImpedanceControllerPosition( ImpedanceController ):
             self.dxp_arr[ :, self.idx_data ] = dxp
             
             # The current joint profiles
-            self.q_arr[  :, self.idx_data ] = q_val
-            self.dq_arr[ :, self.idx_data ] = dq_val
+            # self.q_arr[  :, self.idx_data ] = q_val
+            # self.dq_arr[ :, self.idx_data ] = dq_val
             
             self.xp0_arr[  :, self.idx_data ] = xp0
             self.dxp0_arr[ :, self.idx_data ] = dxp0
     
             # The Jacobian of the robot 
-            self.J_arr[ :, :, self.idx_data ] = J 
+            # self.J_arr[ :, :, self.idx_data ] = J 
             
             # The orientation of the end-effector
             self.quat_arr[ :, self.idx_data ] = self.robot.get_end_effector_orientation( self.which_arm )
@@ -657,12 +657,12 @@ class CartesianImpedanceControllerRotationType1( ImpedanceController ):
             self.tau_arr[ :, self.idx_data ] = tau
 
             # The linear position and velocity of the robot
-            self.xp_arr[  :, self.idx_data ] = xp
-            self.dxp_arr[ :, self.idx_data ] = dxp
+            # self.xp_arr[  :, self.idx_data ] = xp
+            # self.dxp_arr[ :, self.idx_data ] = dxp
             
             # The theta 
             self.theta_arr[ :, self.idx_data ] = theta            
-            self.Jr_arr[ :, self.idx_data ] = Jr
+            # self.Jr_arr[ :, self.idx_data ] = Jr
             
             
             # The orientation of the end-effector
