@@ -82,7 +82,7 @@ def main():
 
     #   idx are                 0                   1               2               3                  4
     idx_opt   = [ nlopt.GN_DIRECT_L, nlopt.GN_DIRECT_L_RAND, nlopt.GN_DIRECT, nlopt.GN_CRS2_LM, nlopt.GN_ESCH  ]
-    idx       = 0
+    idx       = 3
     lb    = np.array( [ -0.80, 0.20, -0.85, -0.10, 0.20, -0.85, 0.6, 0.6, -0.7 ] )
     ub    = np.array( [  0.00, 1.00,  0.85,  0.10, 1.00,  0.85, 1.5, 1.5,  0.7 ] )
     n_opt = 9

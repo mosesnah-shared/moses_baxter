@@ -364,4 +364,4 @@ if __name__ == "__main__":
 
     else:
 
-        my_cam.run( platform_points = np.array( [(308, 116), (173, 405), (862, 398), (709, 114)]  ), color = "yellow"  )
+        my_cam.run( platform_points = np.array( [(307, 110), (176, 401), (859, 392), (710, 110)] ), color = "yellow"  )

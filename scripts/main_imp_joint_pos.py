@@ -81,8 +81,6 @@ def main():
     # Goto grasp posture    
     go2pos( my_baxter, impR, impL, C.FINAL_POSE2, 5 )
     
-    rospy.sleep( 5 )
-    exit( )
     
     # Adding the gripper 
     # Close the gripper

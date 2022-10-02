@@ -260,6 +260,9 @@ class JointImpedanceController( ImpedanceController ):
         # Check whether the size of qi and qf are good
         assert len( qi ) == 7
         assert len( qf ) == 7
+        
+        # If ti is negative, then set as 0 
+        if ti <= 0: ti = 0
 
         # Check whether the D and ti are positive and non-negative, respectively. 
         assert D > 0 and ti >= 0 

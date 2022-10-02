@@ -132,12 +132,13 @@ The available options for CTRL_TYPE are as follows:
                     'right_w2' : -1.5823011827     }
     
     FINAL_POSE2 = { 'right_s0' : 0.7869321442,
-                    'right_s1' : 0.10000000000,
+                    'right_s1' : 0.68000000000,
                     'right_e0' : -0.0149563127,
-                    'right_e1' : 1.0309418454,
+                    'right_e1' : 0.1309418454,
                     'right_w0' : -0.0464029188,
                     'right_w1' : -0.1511893540,
                     'right_w2' : -1.5823011827     }    
+    
 
     # IMPEDANCE PARAMETERS
     # Case 1 - Stronger
