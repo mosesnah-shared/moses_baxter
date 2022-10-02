@@ -270,7 +270,7 @@ class Camera( object ):
 
 
         if   color == "yellow":
-            COLOR_LOWER_BOUND_YELLOW = np.array( [  0,  80,   0 ] )
+            COLOR_LOWER_BOUND_YELLOW = np.array( [  0,  30,   0 ] )
             COLOR_UPPER_BOUND_YELLOW = np.array( [ 45, 255, 255 ] )
 
         elif color == "green":
@@ -363,4 +363,5 @@ if __name__ == "__main__":
         my_cam._get_pos_and_color( )
 
     else:
-        my_cam.run( platform_points = np.array( [(372, 67), (350, 353), (722, 348), (674, 60)]  ), color = "yellow"  )
+
+        my_cam.run( platform_points = np.array( [(308, 116), (173, 405), (862, 398), (709, 114)]  ), color = "yellow"  )

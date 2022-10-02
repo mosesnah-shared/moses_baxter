@@ -301,6 +301,18 @@ class JointImpedanceController( ImpedanceController ):
             # The data pointer that we will use for saving the data 
             self.idx_data = 0 
 
+    def reset( self ):
+        # Resetting the "MOVEMENTS" ONLY
+        # The movement parameters, we save this as an array since multiple submovements may exist
+        self.qi = [ ]
+        self.qf = [ ] 
+        self.D  = [ ]
+        self.ti = [ ]
+
+        # The number of submovements for the ZFT
+        self.n_movs = 0 
+        
+
             
     def calc_torque( self, t: float ):
         """
@@ -837,8 +849,8 @@ if __name__ == "__main__":
         
     elif args.ctrl_type == "joint_position_controller":
         my_ctrl = JointPositionController( my_baxter )
-        my_ctrl.add_movement( which_arm = "right", pose2go = C.GRASP_POSE_UP                   , joint_vel = 0.5, toff = 3 )    
-        my_ctrl.add_movement( which_arm =  "left", pose2go = pose_right2left( C.GRASP_POSE_UP ), joint_vel = 0.5, toff = 3 )
+        my_ctrl.add_movement( which_arm = "right", pose2go = C.FINAL_POSE                   , joint_vel = 0.1, toff = 3 )    
+        my_ctrl.add_movement( which_arm =  "left", pose2go = pose_right2left( C.FINAL_POSE ), joint_vel = 0.1, toff = 3 )
         my_ctrl.run( )
         
         my_ctrl = PrintController( my_baxter )

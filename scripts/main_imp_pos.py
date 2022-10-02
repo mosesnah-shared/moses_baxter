@@ -92,21 +92,21 @@ def main():
     
     left_pos = my_baxter.get_end_effector_pos( which_arm = "left" )
     
-    impL_2.add_linear_movement( xp0i = left_pos       , xp0f = left_pos + np.array( [ 0.0, 0.3, 0.0 ] )              , D = D2, ti = ti2 +  0 * D2             )
+    impL_2.add_linear_movement( xp0i = left_pos       , xp0f = left_pos + np.array( [ 0.0, 0.3, 0.0 ] )             , D = D2, ti = ti2 +  0 * D2             )
     impL_2.add_linear_movement( xp0i = np.zeros( 3 )  , xp0f = np.array( [ 0.0, -0.15,  0.3 * np.sin( np.pi/3 ) ] ) , D = D2, ti = ti2 +  1 * ( D2 + toff2 ) )
     impL_2.add_linear_movement( xp0i = np.zeros( 3 )  , xp0f = np.array( [ 0.0, -0.15, -0.3 * np.sin( np.pi/3 ) ] ) , D = D2, ti = ti2 +  2 * ( D2 + toff2 ) )
-    impL_2.add_linear_movement( xp0i = np.zeros( 3 )  , xp0f = np.array( [ 0.0, 0.3, 0.0 ] )                         , D = D2, ti = ti2 +  3 * ( D2 + toff2 ) )
+    impL_2.add_linear_movement( xp0i = np.zeros( 3 )  , xp0f = np.array( [ 0.0, 0.3, 0.0 ] )                        , D = D2, ti = ti2 +  3 * ( D2 + toff2 ) )
     impL_2.add_linear_movement( xp0i = np.zeros( 3 )  , xp0f = np.array( [ 0.0, -0.15,  0.3 * np.sin( np.pi/3 ) ] ) , D = D2, ti = ti2 +  4 * ( D2 + toff2 ) )
     impL_2.add_linear_movement( xp0i = np.zeros( 3 )  , xp0f = np.array( [ 0.0, -0.15, -0.3 * np.sin( np.pi/3 ) ] ) , D = D2, ti = ti2 +  5 * ( D2 + toff2 ) )
-    impL_2.add_linear_movement( xp0i = np.zeros( 3 )  , xp0f = np.array( [ 0.0, 0.3, 0.0 ] )                         , D = D2, ti = ti2 +  6 * ( D2 + toff2 ) )
+    impL_2.add_linear_movement( xp0i = np.zeros( 3 )  , xp0f = np.array( [ 0.0, 0.3, 0.0 ] )                        , D = D2, ti = ti2 +  6 * ( D2 + toff2 ) )
     impL_2.add_linear_movement( xp0i = np.zeros( 3 )  , xp0f = np.array( [ 0.0, -0.15,  0.3 * np.sin( np.pi/3 ) ] ) , D = D2, ti = ti2 +  7 * ( D2 + toff2 ) )
     impL_2.add_linear_movement( xp0i = np.zeros( 3 )  , xp0f = np.array( [ 0.0, -0.15, -0.3 * np.sin( np.pi/3 ) ] ) , D = D2, ti = ti2 +  8 * ( D2 + toff2 ) )
-    impL_2.add_linear_movement( xp0i = np.zeros( 3 )  , xp0f = np.array( [ 0.0, 0.3, 0.0 ] )                         , D = D2, ti = ti2 +  9 * ( D2 + toff2 ) )
+    impL_2.add_linear_movement( xp0i = np.zeros( 3 )  , xp0f = np.array( [ 0.0, 0.3, 0.0 ] )                        , D = D2, ti = ti2 +  9 * ( D2 + toff2 ) )
     impL_2.add_linear_movement( xp0i = np.zeros( 3 )  , xp0f = np.array( [ 0.0, -0.15,  0.3 * np.sin( np.pi/3 ) ] ) , D = D2, ti = ti2 + 10 * ( D2 + toff2 ) )
     impL_2.add_linear_movement( xp0i = np.zeros( 3 )  , xp0f = np.array( [ 0.0, -0.15, -0.3 * np.sin( np.pi/3 ) ] ) , D = D2, ti = ti2 + 11 * ( D2 + toff2 ) )    
 
     # Saving these impedances as an array to iterate over 
-    imp_arr  = [ impR_1, impL_1, impR_2, impL_2 ]
+    imp_arr  = [ impR_1, impL_1 , impR_2, impL_2 ]
     
     for imp in imp_arr: imp.setup( )
                     
