@@ -83,18 +83,18 @@ def main():
     #   idx are                 0                   1               2               3                  4
     idx_opt   = [ nlopt.GN_DIRECT_L, nlopt.GN_DIRECT_L_RAND, nlopt.GN_DIRECT, nlopt.GN_CRS2_LM, nlopt.GN_ESCH  ]
     idx       = 3
-    lb    = np.array( [ -0.80, 0.20, -0.85, -0.10, 0.20, -0.85, 0.6, 0.6, -0.7 ] )
-    ub    = np.array( [  0.00, 1.00,  0.85,  0.10, 1.00,  0.85, 1.5, 1.5,  0.7 ] )
+    
+    # If GN_DIRECT_L 
+    if idx == 0:
+        lb    = np.array( [ -0.80, 0.20, -0.85, -0.10, 0.20, -0.85, 0.6, 0.6, -0.7 ] )
+        ub    = np.array( [  0.00, 1.00,  0.85,  0.10, 1.00,  0.85, 1.5, 1.5,  0.7 ] )
+    
+    # If GN_CRS2_LM
+    if idx == 3:
+        lb    = np.array( [ -0.80, 0.20, -0.85, -0.15, 0.20, -0.85, 0.8, 0.8, -0.7 ] )
+        ub    = np.array( [  0.00, 1.00,  0.85,  0.10, 1.00,  0.85, 1.5, 1.5,  0.7 ] )
+            
     n_opt = 9
-
-
-    FINAL_POSE = {  'right_s0' : 0.7869321442,
-                    'right_s1' : 0.00000000000,
-                    'right_e0' : -0.0149563127,
-                    'right_e1' : 0.7309418454,
-                    'right_w0' : -0.0464029188,
-                    'right_w1' : -0.2511893540,
-                    'right_w2' : -1.5823011827     }
 
     algorithm = idx_opt[ idx ]                                             
     opt       = nlopt.opt( algorithm, n_opt )              
