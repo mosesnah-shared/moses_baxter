@@ -91,8 +91,8 @@ def main():
     
     # If GN_CRS2_LM
     if idx == 3:
-        lb    = np.array( [ -0.80, 0.20, -0.85, -0.15, 0.20, -0.85, 0.8, 0.8, -0.7 ] )
-        ub    = np.array( [  0.00, 1.00,  0.85,  0.10, 1.00,  0.85, 1.5, 1.5,  0.7 ] )
+        lb    = np.array( [ -0.70, 0.30, -0.85, -0.15, 0.30,  0.00, 0.8, 0.8, -0.5 ] )
+        ub    = np.array( [  0.00, 1.00,  0.85,  0.10, 1.00,  0.85, 1.5, 1.5,  0.5 ] )
             
     n_opt = 9
 
@@ -104,7 +104,7 @@ def main():
                 
 
     # The number of total trials
-    Nt = 300
+    Nt = 100
     opt.set_maxeval( Nt )
     
     # The number of trials for EACH iteration

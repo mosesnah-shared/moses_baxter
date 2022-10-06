@@ -8,7 +8,7 @@ import numpy             as np
 # Local Library, under moses/scripts
 from my_robot     import Baxter
 from my_constants import Constants as C
-from my_utils     import min_jerk_traj, pose_right2left, dict2arr, quat2rot, rot2quat, quat2angx,skew_sym
+from my_utils     import min_jerk_traj, pose_right2left, dict2arr, arr2dict, quat2rot, rot2quat, quat2angx,skew_sym
 
 # Baxter Library
 import baxter_external_devices  
@@ -852,8 +852,23 @@ if __name__ == "__main__":
         
     elif args.ctrl_type == "joint_position_controller":
         my_ctrl = JointPositionController( my_baxter )
-        my_ctrl.add_movement( which_arm = "right", pose2go = C.FINAL_POSE                   , joint_vel = 0.1, toff = 3 )    
-        my_ctrl.add_movement( which_arm =  "left", pose2go = pose_right2left( C.FINAL_POSE ), joint_vel = 0.1, toff = 3 )
+        
+        # We only change the s1, e1, w1 values 
+        # Setting the other joint values (w.r.t. right hand) as constants
+        S0 =  0.7869321442
+        E0 = -0.0149563127
+        W0 = -0.0464029188
+        W1 = -1.5823011827        
+        
+        lb    = np.array( [ -0.80, 0.20, -0.85 ] )# -0.10, 0.20, -0.85, 0.6, 0.6, -0.7 ] )
+        ub    = np.array( [  0.00, 1.00,  0.85 ] )#,  0.10, 1.00,  0.85, 1.5, 1.5,  0.7 ] )
+        
+        tmp = ( lb + ub )* 0.5
+        
+        POSE = arr2dict( which_arm = "right", arr = np.array( [ S0, -0.6, E0, tmp[ 1 ], W0, tmp[ 2 ], W1 ] ) )
+        
+        my_ctrl.add_movement( which_arm = "right", pose2go = C.FINAL_POSE2                   , joint_vel = 0.1, toff = 3 )    
+        my_ctrl.add_movement( which_arm =  "left", pose2go = pose_right2left( C.FINAL_POSE2 ), joint_vel = 0.1, toff = 3 )
         my_ctrl.run( )
         
         my_ctrl = PrintController( my_baxter )
