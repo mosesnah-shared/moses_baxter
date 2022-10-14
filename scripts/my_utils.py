@@ -246,7 +246,6 @@ def skew_sym( w ):
 
     return wtilde
 
- 
 
 def quat2angx( q ):
 
