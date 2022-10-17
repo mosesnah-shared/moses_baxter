@@ -59,4 +59,20 @@ f = figure( ); a = axes( 'parent', f );
 hold on
 plot( data.time, squeeze( dq0( :, :, 1 ) )', 'linestyle',  '-', 'linewidth',  3, 'color', c.black )
 plot( data.time, squeeze( dq0( :, :, 2 ) )', 'linestyle',  '-', 'linewidth',  3, 'color', c.blue )
-plot( data.time, data.dq0', 'linestyle',  '-', 'linewidth',  3, 'color', c.orange )
+
+%% Plot Optimization
+
+plot( data_arr', 'o', 'markeredgecolor', 'k', 'markersize', 10 )
+hold on
+
+% plot( max( data_arr ), 'color', c.blue )
+set( gca, 'xlim', [1,50], 'xtick', [1:5:50,50] )
+
+x = [1 50 50 1 1];
+y = [90 90 100 100 90];
+tmp = fill( x, y, c.blue, 'FaceAlpha',0.3 );
+
+
+
+xlabel( 'Iteration (-)' )
+ylabel( 'Coverage (\%)' )
