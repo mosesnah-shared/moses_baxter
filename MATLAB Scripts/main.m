@@ -72,7 +72,5 @@ x = [1 50 50 1 1];
 y = [90 90 100 100 90];
 tmp = fill( x, y, c.blue, 'FaceAlpha',0.3 );
 
-
-
 xlabel( 'Iteration (-)' )
 ylabel( 'Coverage (\%)' )
